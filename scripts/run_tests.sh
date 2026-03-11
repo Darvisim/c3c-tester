@@ -58,13 +58,14 @@ for i in "${!FILES[@]}"; do
 
     if [[ $status -eq 0 ]]; then
         PASSED=$((PASSED+1))
-        echo "::group::✅ $file (${duration}s)"
+        echo "::group::✓ $file (${duration}s)"
         echo "$output"
         echo "::endgroup::"
     else
         FAILED=$((FAILED+1))
-        echo "❌ $file (${duration}s)"
+        echo "::group::✗ $file (${duration}s)"
         echo "$output"
+        echo "::endgroup::"
     fi
 
     progress_bar "$index" "$TOTAL"
