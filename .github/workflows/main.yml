@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # midnight UTC daily
+  workflow_dispatch:
+
+jobs:
+  c3-matrix-ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            sudo apt update
+            sudo apt install -y git cmake ninja-build build-essential curl tar
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            brew update
+            brew install git cmake ninja
+          else
+            choco install -y git cmake ninja
+          fi
+
+      - name: Sync C3 Repository
+        run: ./scripts/sync.sh
+
+      - name: Build C3 Compiler
+        run: ./scripts/compiler.sh
+
+      - name: Run C3 Tests
+        run: ./scripts/run_tests.sh
+
+      - name: Generate Test Summary
+        run: ./scripts/summary.sh
