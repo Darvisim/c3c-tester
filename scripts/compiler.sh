@@ -10,7 +10,7 @@ mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DC3_LLVM_FETCH=ON
-ninja
+cmake --build build
 
 echo "Verifying c3c build..."
 "$BUILD_DIR/c3c" --version
