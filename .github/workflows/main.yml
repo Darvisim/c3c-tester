@@ -32,6 +32,12 @@ jobs:
           else
             choco install cmake ninja
           fi
+
+      - name: Setup MSVC
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
           
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
