@@ -4,30 +4,8 @@ set -euo pipefail
 C3C="./c3c/build/c3c"
 TEST_DIRS=("c3c/resources" "c3c/test")
 
-TOTAL=0
 PASSED=0
 FAILED=0
-
-echo "::group::Running C3 Tests"
-
-progress_bar() {
-    local progress=$1
-    local total=$2
-    local width=40
-
-    if [ "$total" -eq 0 ]; then
-        return
-    fi
-
-    local done=$((progress * width / total))
-    local left=$((width - done))
-
-    printf "\r["
-    printf "%0.s#" $(seq 1 $done)
-    printf "%0.s-" $(seq 1 $left)
-    printf "] %d/%d" "$progress" "$total"
-}
-
 FILES=()
 
 for dir in "${TEST_DIRS[@]}"; do
@@ -39,34 +17,64 @@ done
 
 TOTAL=${#FILES[@]}
 
-echo "Found $TOTAL test files"
+progress_bar() {
+    local current=$1
+    local total=$2
+    local width=40
+
+    local percent=$(( current * 100 / total ))
+    local filled=$(( percent * width / 100 ))
+    local empty=$(( width - filled ))
+
+    printf "\r["
+    printf "%0.s#" $(seq 1 $filled)
+    printf "%0.s-" $(seq 1 $empty)
+    printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
+}
+
+echo
+echo "Running C3 test suite ($TOTAL tests)"
+echo
 
 for i in "${!FILES[@]}"; do
     file="${FILES[$i]}"
-    progress_bar $((i+1)) "$TOTAL"
+    index=$((i+1))
 
-    echo "::group::Test: $file"
+    output=""
+    status=0
 
     if [[ "$file" == *.c3t ]]; then
-        if "$C3C" compile-test "$file"; then
-            PASSED=$((PASSED+1))
-        else
-            FAILED=$((FAILED+1))
-        fi
+        output=$("$C3C" compile-test "$file" 2>&1) || status=$?
     else
-        if "$C3C" compile-run "$file"; then
-            PASSED=$((PASSED+1))
-        else
-            FAILED=$((FAILED+1))
-        fi
+        output=$("$C3C" compile-run "$file" 2>&1) || status=$?
     fi
 
-    echo "::endgroup::"
+    if [[ $status -eq 0 ]]; then
+        PASSED=$((PASSED+1))
+        echo
+        echo "<details>"
+        echo "<summary>$file</summary>"
+        echo
+        echo '```'
+        echo "$output"
+        echo '```'
+        echo "</details>"
+    else
+        FAILED=$((FAILED+1))
+        echo
+        echo "<details open>"
+        echo "<summary>$file</summary>"
+        echo
+        echo '```'
+        echo "$output"
+        echo '```'
+        echo "</details>"
+    fi
+    progress_bar "$index" "$TOTAL"
 done
 
 echo
-echo "Tests completed."
-
-echo "::endgroup::"
+echo
+echo "Tests complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
 
 echo "$TOTAL|$PASSED|$FAILED" > .test_results
