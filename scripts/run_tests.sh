@@ -22,19 +22,16 @@ progress_bar() {
     local total=$2
     local width=40
 
-    # Avoid division by zero
     [ "$total" -eq 0 ] && return
-
     local percent=$(( current * 100 / total ))
     local filled=$(( current * width / total ))
     local empty=$(( width - filled ))
 
-    # Define characters using printf escapes for safe rendering
-    local filled_char=$(printf "\u2588")
-    local empty_char=$(printf "\u2591")
+    # Universal UTF-8 Hex Sequences
+    local filled_char=$(printf "\xe2\x96\x88") # Solid Block █
+    local empty_char=$(printf "\xe2\x96\x91")  # Light Shade ░
 
     printf "\r["
-    # Use loops to build the bar string safely
     for i in $(seq 1 $filled); do printf "$filled_char"; done
     for i in $(seq 1 $empty); do printf "$empty_char"; done
     printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
