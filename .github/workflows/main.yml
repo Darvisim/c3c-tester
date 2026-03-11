@@ -7,9 +7,6 @@ on:
   push:
     branches: [main]
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true
-
 jobs:
   c3-matrix-ci:
     runs-on: ${{ matrix.os }}
@@ -22,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Dependencies
         run: |
