@@ -22,13 +22,21 @@ progress_bar() {
     local total=$2
     local width=40
 
+    # Avoid division by zero
+    [ "$total" -eq 0 ] && return
+
     local percent=$(( current * 100 / total ))
-    local filled=$(( percent * width / 100 ))
+    local filled=$(( current * width / total ))
     local empty=$(( width - filled ))
 
+    # Define characters using printf escapes for safe rendering
+    local filled_char=$(printf "\u2588")
+    local empty_char=$(printf "\u2591")
+
     printf "\r["
-    printf "%0.s#" $(seq 1 $filled)
-    printf "%0.s-" $(seq 1 $empty)
+    # Use loops to build the bar string safely
+    for i in $(seq 1 $filled); do printf "$filled_char"; done
+    for i in $(seq 1 $empty); do printf "$empty_char"; done
     printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
 }
 
@@ -42,14 +50,8 @@ for i in "${!FILES[@]}"; do
 
     start=$(date +%s%N)
 
-    output=""
     status=0
-
-    if [[ "$file" == *.c3t ]]; then
-        output=$("$C3C" compile-test "$file" 2>&1) || status=$?
-    else
-        output=$("$C3C" compile-run "$file" 2>&1) || status=$?
-    fi
+    output=$("$C3C" compile "$file" 2>&1) || status=$?
 
     end=$(date +%s%N)
     duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
@@ -58,14 +60,16 @@ for i in "${!FILES[@]}"; do
 
     if [[ $status -eq 0 ]]; then
         PASSED=$((PASSED+1))
-        echo "::group::✓ $file (${duration}s)"
+        echo "::group::$file (${duration}s)"
         echo "$output"
         echo "::endgroup::"
+        echo "$file: Passed"
     else
         FAILED=$((FAILED+1))
-        echo "::group::✗ $file (${duration}s)"
+        echo "::group::$file (${duration}s)"
         echo "$output"
         echo "::endgroup::"
+        echo "$file: Failed"
     fi
 
     progress_bar "$index" "$TOTAL"
