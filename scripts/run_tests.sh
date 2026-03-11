@@ -40,6 +40,8 @@ for i in "${!FILES[@]}"; do
     file="${FILES[$i]}"
     index=$((i+1))
 
+    start=$(date +%s%N)
+
     output=""
     status=0
 
@@ -49,27 +51,22 @@ for i in "${!FILES[@]}"; do
         output=$("$C3C" compile-run "$file" 2>&1) || status=$?
     fi
 
+    end=$(date +%s%N)
+    duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
+
+    echo
+
     if [[ $status -eq 0 ]]; then
         PASSED=$((PASSED+1))
-        echo
-        echo "<details>"
-        echo "<summary>$file</summary>"
-        echo
-        echo '```'
+        echo "::group::✅ $file (${duration}s)"
         echo "$output"
-        echo '```'
-        echo "</details>"
+        echo "::endgroup::"
     else
         FAILED=$((FAILED+1))
-        echo
-        echo "<details open>"
-        echo "<summary>$file</summary>"
-        echo
-        echo '```'
+        echo "❌ $file (${duration}s)"
         echo "$output"
-        echo '```'
-        echo "</details>"
     fi
+
     progress_bar "$index" "$TOTAL"
 done
 
