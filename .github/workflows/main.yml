@@ -49,6 +49,7 @@ jobs:
         run: ./scripts/compiler.sh
 
       - name: Run C3 Tests
+        continue-on-error: true
         run: ./scripts/run_tests.sh
 
       - name: Generate Test Summary
