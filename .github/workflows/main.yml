@@ -30,7 +30,10 @@ jobs:
           else
             choco install -y git cmake ninja
           fi
-
+          
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+        
       - name: Sync C3 Repository
         run: ./scripts/sync.sh
 
