@@ -6,12 +6,13 @@ BUILD_DIR="$C3_DIR/build"
 
 echo "::group::Building C3 Compiler"
 
-cmake -S "$C3_DIR" -B "$BUILD_DIR" \
-    -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DC3_LLVM_FETCH=ON
+cmake -B "$BUILD_DIR" \
+  -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DC3_FETCH_LLVM=ON \
+  "$C3_DIR"
 
-cmake --build "$BUILD_DIR" --parallel
+cmake --build "$BUILD_DIR"
 
 echo "Verifying c3c build..."
 "$BUILD_DIR/c3c" --version
