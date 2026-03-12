@@ -40,8 +40,11 @@ jobs:
           
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
+
+      - name: Sync Compiler Repository
+        run: ./scripts/sync.sh https://github.com/c3lang/vendor.git vendor
         
-      - name: Sync C3 Repository
+      - name: Sync Vendor Repository
         run: ./scripts/sync.sh https://github.com/c3lang/vendor.git vendor
 
       - name: Build C3 Compiler
