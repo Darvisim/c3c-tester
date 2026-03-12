@@ -75,6 +75,8 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+
+      - run: chmod +x scripts/*.sh || true
       
       - name: Sync C3 Compiler repo
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
@@ -84,8 +86,6 @@ jobs:
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
-
-      - run: chmod +x scripts/*.sh || true
 
       - name: Sync Vendor
         if: matrix.target == 'vendor'
