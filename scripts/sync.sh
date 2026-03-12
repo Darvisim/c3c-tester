@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${1}"
-CLONE_DIR="${2}"
+REPO_URL="$1"
+DIR="$2"
 
-echo "::group::Cloning $(basename "$REPO_URL" .git)"
+echo "::group::Syncing $DIR"
 
-echo "Repository: $REPO_URL"
-echo "Directory:  $CLONE_DIR"
+if [ -d "$DIR/.git" ]; then
+    echo "Updating existing repo"
+    git -C "$DIR" fetch origin
+    git -C "$DIR" reset --hard origin/HEAD
+else
+    echo "Cloning $REPO_URL"
+    git clone --depth 1 "$REPO_URL" "$DIR"
+fi
 
-git clone --depth 1 "$REPO_URL" "$CLONE_DIR"
+COMMIT=$(git -C "$DIR" rev-parse --short HEAD)
 
-cd "$CLONE_DIR"
-
-COMMIT=$(git rev-parse --short HEAD)
-
-echo "Checked out commit $COMMIT"
-
-cd ..
+echo "$DIR commit: $COMMIT"
 
 echo "::endgroup::"
