@@ -28,7 +28,6 @@ else
     exit 1
 fi
 
-# Ensure compiler exists
 if [[ ! -x "$C3C" ]]; then
     echo "Compiler not found or not executable: $C3C"
     exit 1
@@ -81,18 +80,19 @@ for i in "${!FILES[@]}"; do
 
     status=0
 
-    # Detect main() function
+    ext="${file##*.}"
+
     if grep -Eq 'fn[[:space:]]+.*main[[:space:]]*\(' "$file"; then
         output=$("$C3C" compile "$file" 2>&1) || status=$?
     else
-        tmp=$(mktemp)
-
+        tmp=$(mktemp "${TMPDIR:-/tmp}/c3tmpXXXXXX.${ext}")
+    
         cat "$file" > "$tmp"
         echo "" >> "$tmp"
         echo "fn void main() => 0;" >> "$tmp"
-
+    
         output=$("$C3C" compile "$tmp" 2>&1) || status=$?
-
+    
         rm -f "$tmp"
     fi
 
