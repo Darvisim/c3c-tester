@@ -6,11 +6,11 @@ BUILD_DIR="$C3_DIR/build"
 
 echo "::group::Building C3 Compiler"
 
-cmake -B "$BUILD_DIR" \
-  -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DC3_FETCH_LLVM=ON \
-  "$C3_DIR"
+cmake -S "$C3_DIR" \
+      -B "$BUILD_DIR" \
+      -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DC3_FETCH_LLVM=ON
 
 cmake --build "$BUILD_DIR"
 
