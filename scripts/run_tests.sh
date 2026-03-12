@@ -89,7 +89,7 @@ for i in "${!FILES[@]}"; do
     
         cat "$file" > "$tmp"
         echo "" >> "$tmp"
-        echo "fn void main() => 0;" >> "$tmp"
+        echo "fn void main() {}" >> "$tmp"
     
         output=$("$C3C" compile "$tmp" 2>&1) || status=$?
     
