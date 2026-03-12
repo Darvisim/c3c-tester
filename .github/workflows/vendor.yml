@@ -1,4 +1,4 @@
-name: Compiler CI
+name: Vendor CI
 
 on:
   schedule:
