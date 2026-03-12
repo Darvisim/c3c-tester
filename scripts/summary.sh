@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ ! -f .test_results ]; then
-    echo "No test results found!"
-    exit 1
-fi
+echo "::group::Generating unified summary"
 
-IFS="|" read -r TOTAL PASSED FAILED < .test_results
+echo "## C3 CI Test Summary" >> "$GITHUB_STEP_SUMMARY"
+echo "" >> "$GITHUB_STEP_SUMMARY"
 
-echo "::group::Generating Test Summary"
+echo "| OS | Total | Passed | Failed |" >> "$GITHUB_STEP_SUMMARY"
+echo "|----|------:|------:|------:|" >> "$GITHUB_STEP_SUMMARY"
 
-SUMMARY="## C3 CI Test Summary
+for f in results-*/*; do
+    OS=$(basename "$(dirname "$f")" | sed 's/results-//')
 
-| Total Tests | Passed | Failed |
-|------------:|-------:|-------:|
-| $TOTAL | $PASSED | $FAILED |"
+    IFS="|" read -r TOTAL PASSED FAILED < "$f"
 
-echo "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
-echo "$SUMMARY"
+    echo "| $OS | $TOTAL | $PASSED | $FAILED |" >> "$GITHUB_STEP_SUMMARY"
+done
 
 echo "::endgroup::"
