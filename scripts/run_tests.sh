@@ -3,6 +3,10 @@ set -euo pipefail
 
 MODE="${1:-compiler}"
 
+OS="${RUNNER_OS:-unknown}"
+RESULT_DIR="results-${OS}-${MODE}"
+mkdir -p "$RESULT_DIR"
+
 PASSED=0
 FAILED=0
 FILES=()
@@ -70,7 +74,6 @@ for i in "${!FILES[@]}"; do
     duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
 
     echo
-
     echo "::group::$file (${duration}s)"
     echo "$output"
     echo "::endgroup::"
@@ -90,4 +93,4 @@ echo
 echo
 echo "Checks complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
 
-echo "$TOTAL|$PASSED|$FAILED" > .test_results
+echo "$TOTAL|$PASSED|$FAILED" > "$RESULT_DIR/.test_results"
