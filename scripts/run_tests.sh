@@ -28,6 +28,13 @@ else
     exit 1
 fi
 
+# Ensure compiler exists
+if [[ ! -x "$C3C" ]]; then
+    echo "Compiler not found or not executable: $C3C"
+    exit 1
+fi
+
+# Collect files
 for dir in "${SEARCH_DIRS[@]}"; do
     [ -d "$dir" ] || continue
     while IFS= read -r -d '' file; do
@@ -37,12 +44,17 @@ done
 
 TOTAL=${#FILES[@]}
 
+# Handle empty test sets
+if [[ "$TOTAL" -eq 0 ]]; then
+    echo "No test files found."
+    echo "$OS|$MODE|0|0|0" > "$RESULT_DIR/.test_results"
+    exit 0
+fi
+
 progress_bar() {
     local current=$1
     local total=$2
     local width=40
-
-    [ "$total" -eq 0 ] && return
 
     local percent=$(( current * 100 / total ))
     local filled=$(( current * width / total ))
@@ -52,8 +64,8 @@ progress_bar() {
     local empty_char=$(printf "\xe2\x96\x91")
 
     printf "\r["
-    for i in $(seq 1 $filled); do printf "$filled_char"; done
-    for i in $(seq 1 $empty); do printf "$empty_char"; done
+    for ((i=0;i<filled;i++)); do printf "$filled_char"; done
+    for ((i=0;i<empty;i++)); do printf "$empty_char"; done
     printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
 }
 
@@ -68,7 +80,21 @@ for i in "${!FILES[@]}"; do
     start=$(date +%s%N)
 
     status=0
-    output=$("$C3C" compile "$file" 2>&1) || status=$?
+
+    # Detect main() function
+    if grep -Eq 'fn[[:space:]]+.*main[[:space:]]*\(' "$file"; then
+        output=$("$C3C" compile "$file" 2>&1) || status=$?
+    else
+        tmp=$(mktemp)
+
+        cat "$file" > "$tmp"
+        echo "" >> "$tmp"
+        echo "fn void main() => 0;" >> "$tmp"
+
+        output=$("$C3C" compile "$tmp" 2>&1) || status=$?
+
+        rm -f "$tmp"
+    fi
 
     end=$(date +%s%N)
     duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
@@ -93,4 +119,5 @@ echo
 echo
 echo "Checks complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
 
-echo "$TOTAL|$PASSED|$FAILED" > "$RESULT_DIR/.test_results"
+# Save results for CI summary
+echo "$OS|$MODE|$TOTAL|$PASSED|$FAILED" > "$RESULT_DIR/.test_results"
