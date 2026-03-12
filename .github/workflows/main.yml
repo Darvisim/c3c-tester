@@ -75,6 +75,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: results
-  
+          
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+        
       - name: Generate summary
         run: ./scripts/summary.sh
