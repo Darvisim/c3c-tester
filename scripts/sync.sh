@@ -1,50 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="https://github.com/c3lang/c3c.git"
-CLONE_DIR="./c3c"
+REPO_URL="${1}"
+CLONE_DIR="${2}"
 
-echo "::group::Syncing c3c repository"
+echo "::group::Cloning $(basename "$REPO_URL" .git)"
 
-if [ -d "$CLONE_DIR/.git" ]; then
-    echo "Repository exists. Checking for updates..."
+echo "Repository: $REPO_URL"
+echo "Directory:  $CLONE_DIR"
 
-    cd "$CLONE_DIR"
+git clone --depth 1 "$REPO_URL" "$CLONE_DIR"
 
-    OLD_HASH=$(git rev-parse --short HEAD)
+cd "$CLONE_DIR"
 
-    git fetch origin master
+COMMIT=$(git rev-parse --short HEAD)
 
-    NEW_HASH=$(git rev-parse --short origin/master)
+echo "Checked out commit $COMMIT"
 
-    if [ "$OLD_HASH" = "$NEW_HASH" ]; then
-        echo "Already up to date ($OLD_HASH)"
-    else
-        echo "Updates detected:"
-        echo
-
-        # Show commits merged into upstream/master since last sync
-        git log --pretty=format:'%h -> %h : %s' HEAD..origin/master
-
-        echo
-        echo "Updating repository..."
-
-        git reset --hard origin/master
-    fi
-
-    cd ..
-
-else
-    echo "Cloning c3c repository..."
-    git clone "$REPO_URL" "$CLONE_DIR"
-
-    cd "$CLONE_DIR"
-
-    NEW_HASH=$(git rev-parse --short HEAD)
-
-    echo "Initial clone at commit $NEW_HASH"
-
-    cd ..
-fi
+cd ..
 
 echo "::endgroup::"
