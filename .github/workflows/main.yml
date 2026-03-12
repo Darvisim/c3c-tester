@@ -8,21 +8,19 @@ on:
     branches: [main]
 
 jobs:
-  c3-matrix-ci:
-    runs-on: ${{ matrix.os }}
-
+  build-compiler:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        target: [compiler, vendor]
+
+    runs-on: ${{ matrix.os }}
 
     defaults:
       run:
         shell: bash
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - uses: &checkout actions/checkout@v5
 
       - name: Setup Dependencies
         run: |
@@ -41,43 +39,80 @@ jobs:
         with:
           arch: x64
 
-      - name: Make scripts executable
-        run: chmod +x scripts/*.sh
+      - run: chmod +x scripts/*.sh
 
-      - name: Sync C3 Compiler Repository
+      - name: Sync C3 Compiler
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
-      - name: Sync Vendor Repository
+      - name: Build compiler
+        run: ./scripts/compiler.sh
+
+      - name: Upload compiler
+        uses: &upload actions/upload-artifact@v4
+        with:
+          name: c3c-${{ runner.os }}
+          path: c3c/build
+
+  run-tests:
+    needs: build-compiler
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        target: [compiler, vendor]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: *checkout
+
+      - name: Download compiler
+        uses: actions/download-artifact@v4
+        with:
+          name: c3c-${{ runner.os }}
+          path: c3c/build
+
+      - name: Setup MSVC
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - run: chmod +x scripts/*.sh
+
+      - name: Sync C3 Compiler repo
+        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
+
+      - name: Sync Vendor
         if: matrix.target == 'vendor'
         run: ./scripts/sync.sh https://github.com/c3lang/vendor.git vendor
-
-      - name: Build C3 Compiler
-        run: ./scripts/compiler.sh
 
       - name: Run Tests
         continue-on-error: true
         run: ./scripts/run_tests.sh ${{ matrix.target }}
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
+      - name: Upload results
+        uses: *upload
         with:
-          name: results-${{ matrix.os }}-${{ matrix.target }}
+          name: results-${{ runner.os }}-${{ matrix.target }}
           path: results-*
 
   summary:
-    needs: c3-matrix-ci
+    needs: run-tests
     runs-on: ubuntu-latest
-  
+
     steps:
-      - uses: actions/checkout@v5
-  
-      - name: Download all results
-        uses: actions/download-artifact@v4
+      - uses: *checkout
+
+      - uses: actions/download-artifact@v4
         with:
           path: results
-          
-      - name: Make scripts executable
-        run: chmod +x scripts/*.sh
-        
+
+      - run: chmod +x scripts/*.sh
+
       - name: Generate summary
         run: ./scripts/summary.sh
