@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: results-${{ matrix.os }}-${{ matrix.target }}
-          path: results-*/.test_results
+          path: results-*
 
   summary:
     needs: c3-matrix-ci
