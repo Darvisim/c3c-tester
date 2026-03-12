@@ -42,14 +42,14 @@ jobs:
         run: chmod +x scripts/*.sh
         
       - name: Sync C3 Repository
-        run: ./scripts/sync.sh
+        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
       - name: Build C3 Compiler
-        run: ./scripts/compiler.sh
+        run: ./scripts/compiler.sh 
 
       - name: Run C3 Tests
         continue-on-error: true
-        run: ./scripts/run_tests.sh
+        run: ./scripts/run_tests.sh compiler
 
       - name: Generate Test Summary
         run: ./scripts/summary.sh
