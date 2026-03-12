@@ -1,24 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "::group::Generating unified summary"
-
 echo "## C3 CI Test Summary" >> "$GITHUB_STEP_SUMMARY"
 echo "" >> "$GITHUB_STEP_SUMMARY"
 
 echo "| OS | Target | Total | Passed | Failed |" >> "$GITHUB_STEP_SUMMARY"
 echo "|----|--------|------:|------:|------:|" >> "$GITHUB_STEP_SUMMARY"
 
-RESULT_FILES=$(find . -type f -name ".test_results" || true)
-
-if [ -z "$RESULT_FILES" ]; then
-    echo "No test results found."
-    echo "| - | - | 0 | 0 | 0 |" >> "$GITHUB_STEP_SUMMARY"
-    echo "::endgroup::"
-    exit 0
-fi
-
-for f in $RESULT_FILES; do
+find results -name ".test_results" | while read f; do
     dir=$(basename "$(dirname "$f")")
 
     OS=$(echo "$dir" | cut -d- -f2)
@@ -28,5 +17,3 @@ for f in $RESULT_FILES; do
 
     echo "| $OS | $TARGET | $TOTAL | $PASSED | $FAILED |" >> "$GITHUB_STEP_SUMMARY"
 done
-
-echo "::endgroup::"
