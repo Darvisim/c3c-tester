@@ -1,18 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-C3C="./c3c/build/c3c"
-TEST_DIRS=("c3c/resources" "c3c/test")
+MODE="${1:-compiler}"
 
 PASSED=0
 FAILED=0
 FILES=()
 
-for dir in "${TEST_DIRS[@]}"; do
+if [[ "$MODE" == "compiler" ]]; then
+    ROOT="c3c"
+    C3C="./c3c/build/c3c"
+    SEARCH_EXT=(-name "*.c3" -o -name "*.c3t")
+    SEARCH_DIRS=("c3c/resources" "c3c/test")
+
+elif [[ "$MODE" == "vendor" ]]; then
+    ROOT="vendor"
+    C3C="./c3c/build/c3c"
+    SEARCH_EXT=(-name "*.c3" -o -name "*.c3i")
+    SEARCH_DIRS=("vendor/libraries")
+
+else
+    echo "Unknown mode: $MODE"
+    exit 1
+fi
+
+for dir in "${SEARCH_DIRS[@]}"; do
     [ -d "$dir" ] || continue
     while IFS= read -r -d '' file; do
         FILES+=("$file")
-    done < <(find "$dir" -type f \( -name "*.c3t" -o -name "*.c3" \) -print0)
+    done < <(find "$dir" -type f \( "${SEARCH_EXT[@]}" \) -print0)
 done
 
 TOTAL=${#FILES[@]}
@@ -23,13 +39,13 @@ progress_bar() {
     local width=40
 
     [ "$total" -eq 0 ] && return
+
     local percent=$(( current * 100 / total ))
     local filled=$(( current * width / total ))
     local empty=$(( width - filled ))
 
-    # Universal UTF-8 Hex Sequences
-    local filled_char=$(printf "\xe2\x96\x88") # Solid Block █
-    local empty_char=$(printf "\xe2\x96\x91")  # Light Shade ░
+    local filled_char=$(printf "\xe2\x96\x88")
+    local empty_char=$(printf "\xe2\x96\x91")
 
     printf "\r["
     for i in $(seq 1 $filled); do printf "$filled_char"; done
@@ -38,7 +54,7 @@ progress_bar() {
 }
 
 echo
-echo "Running C3 test suite ($TOTAL tests)"
+echo "Running C3 $MODE checks ($TOTAL files)"
 echo
 
 for i in "${!FILES[@]}"; do
@@ -55,17 +71,15 @@ for i in "${!FILES[@]}"; do
 
     echo
 
+    echo "::group::$file (${duration}s)"
+    echo "$output"
+    echo "::endgroup::"
+
     if [[ $status -eq 0 ]]; then
         PASSED=$((PASSED+1))
-        echo "::group::$file (${duration}s)"
-        echo "$output"
-        echo "::endgroup::"
         echo "$file: Passed"
     else
         FAILED=$((FAILED+1))
-        echo "::group::$file (${duration}s)"
-        echo "$output"
-        echo "::endgroup::"
         echo "$file: Failed"
     fi
 
@@ -74,6 +88,6 @@ done
 
 echo
 echo
-echo "Tests complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
+echo "Checks complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
 
 echo "$TOTAL|$PASSED|$FAILED" > .test_results
