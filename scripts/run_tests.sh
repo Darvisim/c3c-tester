@@ -16,23 +16,7 @@ FILES=()
 # Detect CPU cores
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 
-if [[ "$MODE" == "compiler" ]]; then
-    ROOT="c3c"
-    C3C="./c3c/build/c3c"
-    SEARCH_DIRS=("c3c/resources" "c3c/test")
-    EXTENSIONS=("c3" "c3t")
-
-elif [[ "$MODE" == "vendor" ]]; then
-    ROOT="vendor"
-    C3C="./c3c/build/c3c"
-    SEARCH_DIRS=("vendor/libraries")
-    EXTENSIONS=("c3" "c3i")
-
-else
-    echo "Unknown mode: $MODE"
-    echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
-    exit 0
-fi
+C3C="./c3c/build/c3c"
 
 # Ensure compiler exists
 if [[ ! -x "$C3C" ]]; then
@@ -41,12 +25,79 @@ if [[ ! -x "$C3C" ]]; then
     exit 0
 fi
 
+############################################
+# Run upstream testproject (integration test)
+############################################
+
+run_testproject() {
+
+    echo
+    echo "Running C3 integration testproject"
+    echo
+
+    pushd c3c/resources/testproject > /dev/null
+
+    ARGS="--trust=full"
+
+    case "$RUNNER_OS" in
+        Linux|macOS)
+            ARGS="$ARGS --linker=builtin"
+
+            if [ -f "/etc/alpine-release" ]; then
+                ARGS="$ARGS --linux-libc=musl"
+            fi
+            ;;
+    esac
+
+    "$C3C" run -vv $ARGS
+    "$C3C" clean
+
+    if [[ "$RUNNER_OS" == "Windows" ]]; then
+        "$C3C" -vv --emit-llvm run hello_world_win32 $ARGS
+        "$C3C" clean
+        "$C3C" -vv build hello_world_win32_lib $ARGS
+    fi
+
+    popd > /dev/null
+}
+
+############################################
+# Configure search paths
+############################################
+
+if [[ "$MODE" == "compiler" ]]; then
+
+    run_testproject
+
+    SEARCH_DIRS=("c3c/resources" "c3c/test")
+
+elif [[ "$MODE" == "vendor" ]]; then
+
+    SEARCH_DIRS=("vendor/libraries")
+
+else
+    echo "Unknown mode: $MODE"
+    echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
+    exit 0
+fi
+
+############################################
 # Collect test files
+############################################
+
 for dir in "${SEARCH_DIRS[@]}"; do
+
     [ -d "$dir" ] || continue
 
     while IFS= read -r -d '' file; do
+
+        # Skip integration project files
+        if [[ "$file" == *"testproject"* ]]; then
+            continue
+        fi
+
         FILES+=("$file")
+
     done < <(
         find "$dir" -type f \( \
             -name "*.c3" -o \
@@ -54,6 +105,7 @@ for dir in "${SEARCH_DIRS[@]}"; do
             -name "*.c3i" \
         \) -print0
     )
+
 done
 
 TOTAL=${#FILES[@]}
@@ -69,7 +121,10 @@ echo "Running C3 $MODE checks ($TOTAL files)"
 echo "Using $JOBS parallel jobs"
 echo
 
-# High resolution progress bar
+############################################
+# Progress bar (1/8 block resolution)
+############################################
+
 progress_bar() {
 
     local current=$1
@@ -94,6 +149,7 @@ progress_bar() {
 
     if (( full_blocks < width )); then
         printf "%s" "${parts[$partial_block]}"
+
         for ((i=full_blocks+1;i<width;i++)); do
             printf " "
         done
@@ -101,6 +157,10 @@ progress_bar() {
 
     printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
 }
+
+############################################
+# Compilation function
+############################################
 
 compile_file() {
 
@@ -143,6 +203,10 @@ compile_file() {
 
 export -f compile_file
 export C3C
+
+############################################
+# Run tests in parallel
+############################################
 
 COUNT=0
 
