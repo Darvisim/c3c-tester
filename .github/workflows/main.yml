@@ -8,6 +8,7 @@ on:
     branches: [main]
 
 jobs:
+
   build-compiler:
     strategy:
       matrix:
@@ -53,6 +54,7 @@ jobs:
           name: c3c-${{ runner.os }}
           path: c3c/build
 
+
   run-tests:
     needs: build-compiler
 
@@ -77,15 +79,15 @@ jobs:
           arch: x64
 
       - run: chmod +x scripts/*.sh || true
-      
-      - name: Sync C3 Compiler repo
-        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
-
+ 
       - name: Download compiler
         uses: actions/download-artifact@v4
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
+ 
+      - name: Sync C3 Compiler repo
+        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
       - name: Sync Vendor
         if: matrix.target == 'vendor'
@@ -99,7 +101,8 @@ jobs:
         uses: *upload
         with:
           name: results-${{ runner.os }}-${{ matrix.target }}
-          path: results-*
+          path: results-*/.test_results
+
 
   summary:
     needs: run-tests
@@ -108,11 +111,12 @@ jobs:
     steps:
       - uses: *checkout
 
-      - uses: actions/download-artifact@v4
+      - name: Download all test results
+        uses: actions/download-artifact@v4
         with:
           path: results
 
-      - run: chmod +x scripts/*.sh
+      - run: chmod +x scripts/*.sh || true
 
       - name: Generate summary
         run: ./scripts/summary.sh
