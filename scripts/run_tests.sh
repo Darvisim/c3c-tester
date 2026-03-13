@@ -18,13 +18,13 @@ JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 
 if [[ "$MODE" == "compiler" ]]; then
     ROOT="c3c"
-    C3C="./c3c/build/c3c"
+    C3C=C3C=$(find c3c/build -maxdepth 1 -type f -name "c3c*" | head -n1)
     SEARCH_DIRS=("c3c/resources" "c3c/test")
     EXTENSIONS=("c3" "c3t")
 
 elif [[ "$MODE" == "vendor" ]]; then
     ROOT="vendor"
-    C3C="./c3c/build/c3c"
+    C3C=C3C=$(find c3c/build -maxdepth 1 -type f -name "c3c*" | head -n1)
     SEARCH_DIRS=("vendor/libraries")
     EXTENSIONS=("c3" "c3i")
 
