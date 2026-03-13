@@ -6,6 +6,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
 
@@ -71,32 +73,35 @@ jobs:
 
     steps:
       - uses: *checkout
-
+    
       - name: Setup MSVC
         if: matrix.os == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-
+    
       - run: chmod +x scripts/*.sh || true
- 
+    
+      - name: Sync C3 Compiler repo
+        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
+    
       - name: Download compiler
         uses: actions/download-artifact@v4
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
- 
-      - name: Sync C3 Compiler repo
-        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
-
+    
+      - name: Ensure compiler executable
+        run: chmod +x c3c/build/c3c || true
+    
       - name: Sync Vendor
         if: matrix.target == 'vendor'
         run: ./scripts/sync.sh https://github.com/c3lang/vendor.git vendor
-
+    
       - name: Run Tests
         continue-on-error: true
         run: ./scripts/run_tests.sh ${{ matrix.target }}
-
+    
       - name: Upload results
         uses: *upload
         with:
