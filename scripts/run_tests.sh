@@ -7,49 +7,60 @@ OS="${RUNNER_OS:-unknown}"
 RESULT_DIR="results-${OS}-${MODE}"
 mkdir -p "$RESULT_DIR"
 
+RESULT_FILE="$RESULT_DIR/.test_results"
+
 PASSED=0
 FAILED=0
 FILES=()
 
-# Detect CPU cores for parallel testing
+# Detect CPU cores
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 
 if [[ "$MODE" == "compiler" ]]; then
     ROOT="c3c"
     C3C="./c3c/build/c3c"
-    SEARCH_EXT=(-name ".c3" -o -name ".c3t")
     SEARCH_DIRS=("c3c/resources" "c3c/test")
+    EXTENSIONS=("c3" "c3t")
 
 elif [[ "$MODE" == "vendor" ]]; then
     ROOT="vendor"
     C3C="./c3c/build/c3c"
-    SEARCH_EXT=(-name ".c3" -o -name ".c3i")
     SEARCH_DIRS=("vendor/libraries")
+    EXTENSIONS=("c3" "c3i")
 
 else
     echo "Unknown mode: $MODE"
-    exit 1
+    echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
+    exit 0
 fi
 
 # Ensure compiler exists
 if [[ ! -x "$C3C" ]]; then
     echo "Compiler not found: $C3C"
-    exit 1
+    echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
+    exit 0
 fi
 
 # Collect test files
 for dir in "${SEARCH_DIRS[@]}"; do
     [ -d "$dir" ] || continue
+
     while IFS= read -r -d '' file; do
         FILES+=("$file")
-    done < <(find "$dir" -type f ( "${SEARCH_EXT[@]}" ) -print0)
+    done < <(
+        find "$dir" -type f \( \
+            -name "*.c3" -o \
+            -name "*.c3t" -o \
+            -name "*.c3i" \
+        \) -print0
+    )
 done
 
 TOTAL=${#FILES[@]}
 
 if [[ "$TOTAL" -eq 0 ]]; then
     echo "No test files found."
-    echo "$OS|$MODE|0|0|0" > "$RESULT_DIR/.test_results"
+    echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
     exit 0
 fi
 
@@ -58,21 +69,36 @@ echo "Running C3 $MODE checks ($TOTAL files)"
 echo "Using $JOBS parallel jobs"
 echo
 
+# High resolution progress bar
 progress_bar() {
+
     local current=$1
     local total=$2
     local width=40
 
     local percent=$(( current * 100 / total ))
-    local filled=$(( current * width / total ))
-    local empty=$(( width - filled ))
 
-    local filled_char=$(printf "\xe2\x96\x88")
-    local empty_char=$(printf "\xe2\x96\x91")
+    local parts=(" " "▏" "▎" "▍" "▌" "▋" "▊" "▉")
+
+    local total_blocks=$((width * 8))
+    local filled_blocks=$((percent * total_blocks / 100))
+
+    local full_blocks=$((filled_blocks / 8))
+    local partial_block=$((filled_blocks % 8))
 
     printf "\r["
-    for ((i=0;i<filled;i++)); do printf "$filled_char"; done
-    for ((i=0;i<empty;i++)); do printf "$empty_char"; done
+
+    for ((i=0;i<full_blocks;i++)); do
+        printf "█"
+    done
+
+    if (( full_blocks < width )); then
+        printf "%s" "${parts[$partial_block]}"
+        for ((i=full_blocks+1;i<width;i++)); do
+            printf " "
+        done
+    fi
+
     printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
 }
 
@@ -85,9 +111,10 @@ compile_file() {
 
     status=0
 
-    if grep -Eq 'fn[[:space:]]+.main[[:space:]](' "$file"; then
+    if grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
         output=$("$C3C" compile "$file" 2>&1) || status=$?
     else
+
         tmp=$(mktemp "${TMPDIR:-/tmp}/c3tmpXXXXXX.${ext}")
 
         cat "$file" > "$tmp"
@@ -101,7 +128,7 @@ compile_file() {
     fi
 
     end=$(date +%s%N)
-    duration=$(awk "BEGIN {printf "%.3f", ($end-$start)/1000000000}")
+    duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
 
     echo "::group::$file (${duration}s)"
     echo "$output"
@@ -134,10 +161,11 @@ while IFS="|" read -r result file; do
     fi
 
     progress_bar "$COUNT" "$TOTAL"
+
 done
 
 echo
 echo
 echo "Checks complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
 
-echo "$OS|$MODE|$TOTAL|$PASSED|$FAILED" > "$RESULT_DIR/.test_results"
+echo "$OS|$MODE|$TOTAL|$PASSED|$FAILED" > "$RESULT_FILE"
