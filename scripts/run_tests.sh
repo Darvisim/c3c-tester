@@ -7,7 +7,7 @@ OS="${RUNNER_OS:-unknown}"
 RESULT_DIR="results-${OS}-${MODE}"
 mkdir -p "$RESULT_DIR"
 
-RESULT_FILE="$RESULT_DIR/.test_results"
+RESULT_FILE="$RESULT_DIR/test_results.txt"
 
 PASSED=0
 FAILED=0
@@ -19,12 +19,14 @@ JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 if [[ "$MODE" == "compiler" ]]; then
     ROOT="c3c"
     C3C="./c3c/build/c3c"
+    [[ "$OS" == "Windows" ]] && C3C="${C3C}.exe"
     SEARCH_DIRS=("c3c/resources" "c3c/test")
     EXTENSIONS=("c3" "c3t")
 
 elif [[ "$MODE" == "vendor" ]]; then
     ROOT="vendor"
     C3C="./c3c/build/c3c"
+    [[ "$OS" == "Windows" ]] && C3C="${C3C}.exe"
     SEARCH_DIRS=("vendor/libraries")
     EXTENSIONS=("c3" "c3i")
 
@@ -35,7 +37,7 @@ else
 fi
 
 # Ensure compiler exists
-if [[ ! -x "$C3C" ]]; then
+if [[ ! -f "$C3C" ]]; then
     echo "Compiler not found: $C3C"
     echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
     exit 0

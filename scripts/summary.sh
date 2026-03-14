@@ -23,7 +23,7 @@ while IFS= read -r file; do
     PASSED_SUM=$((PASSED_SUM + PASSED))
     FAILED_SUM=$((FAILED_SUM + FAILED))
 
-done < <(find results -name ".test_results" 2>/dev/null || true)
+done < <(find results -name "test_results.txt" 2>/dev/null || true)
 
 IFS=$'\n' sorted=($(printf "%s\n" "${rows[@]}" | sort))
 unset IFS

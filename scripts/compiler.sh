@@ -15,6 +15,8 @@ cmake -S "$C3_DIR" \
 cmake --build "$BUILD_DIR"
 
 echo "Verifying c3c build..."
-"$BUILD_DIR/c3c" --version
+C3C_EXE="$BUILD_DIR/c3c"
+[ -f "${C3C_EXE}.exe" ] && C3C_EXE="${C3C_EXE}.exe"
+"$C3C_EXE" --version
 
 echo "::endgroup::"
