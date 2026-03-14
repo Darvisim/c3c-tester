@@ -10,6 +10,7 @@ RESULT_FILE="$RESULT_DIR/test_results.txt"
 PASSED=0
 FAILED=0
 FILES=()
+FAILED_LIST=()
 
 # Detect CPU cores
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
@@ -65,8 +66,6 @@ progress_bar() {
     # Hex codes for UTF-8 characters:
     # █ -> \xe2\x96\x88
     # ▏ -> \xe2\x96\x8f
-    # ... and so on. We'll use a simpler bar for CI if needed, 
-    # but the user wants the "shapes" replaced with hex codes.
     local full_char=$(printf "\xe2\x96\x88")
     local parts=(" " 
                   $(printf "\xe2\x96\x8f") 
@@ -82,7 +81,6 @@ progress_bar() {
     local partial_block=$((filled_blocks % 8))
 
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        # The user wants the bar after each test
         printf " ["
         for ((i=0;i<full_blocks;i++)); do printf "%s" "$full_char"; done
         if (( full_blocks < width )); then
@@ -107,14 +105,17 @@ compile_file() {
     local ext="${file##*.}"
     local start=$(date +%s%N)
     local status=0
+    local output=""
+    local injected=0
 
-    # Inject main if missing. Robustly check for 'fn ... main('
-    if ! grep -Eq 'fn[[:space:]]+.*main[[:space:]]*\(' "$file"; then
+    # Improved main() detection. Look for 'fn [type] main('
+    if ! grep -Eq 'fn[[:space:]]+([[:alnum:]_<>\[\]*]+[[:space:]]+)?main[[:space:]]*\(' "$file"; then
         local tmp=$(mktemp "${TMPDIR:-/tmp}/c3tmpXXXXXX.${ext}")
         cp "$file" "$tmp"
         printf "\n// injected by CI\nfn void main() => 0;\n" >> "$tmp"
         output=$("$C3C" compile "$tmp" 2>&1) || status=$?
         rm -f "$tmp"
+        injected=1
     else
         output=$("$C3C" compile "$file" 2>&1) || status=$?
     fi
@@ -122,19 +123,25 @@ compile_file() {
     local end=$(date +%s%N)
     local duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
 
-    echo "::group::$file (${duration}s)"
-    echo "$output"
-    echo "::endgroup::"
-
-    if [[ $status -eq 0 ]]; then
-        echo "RESULT:PASS|$file"
-    else
-        echo "RESULT:FAIL|$file"
+    # Build the entire group block in a variable to ensure atomicity in parallel output
+    local block="::group::$file (${duration}s)\n"
+    if [[ $injected -eq 1 ]]; then
+        block+="$(log_info "main() was injected for this file.")\n"
     fi
+    block+="${output}\n"
+    block+="::endgroup::\n"
+    
+    if [[ $status -eq 0 ]]; then
+        block+="RESULT:PASS|$file"
+    else
+        block+="RESULT:FAIL|$file"
+    fi
+    
+    echo -e "$block"
 }
 
-export -f compile_file
-export C3C
+export -f compile_file log_info log_success log_warn log_error
+export C3C BLUE GREEN YELLOW RED NC
 
 COUNT=0
 printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} | while read -r line; do
@@ -147,6 +154,7 @@ printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' 
             log_success "$file: Passed"
         else
             FAILED=$((FAILED+1))
+            FAILED_LIST+=("$file")
             log_error "$file: Failed"
         fi
         progress_bar "$COUNT" "$TOTAL"
@@ -157,4 +165,8 @@ printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' 
 done
 
 echo -e "\n\nChecks complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
+
 echo "$PLATFORM|$MODE|$TOTAL|$PASSED|$FAILED" > "$RESULT_FILE"
+for fail in "${FAILED_LIST[@]}"; do
+    echo "$fail" >> "$RESULT_FILE"
+done

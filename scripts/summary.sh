@@ -13,13 +13,22 @@ PASSED_SUM=0
 FAILED_SUM=0
 rows=()
 
+FAILED_LIST_ALL=()
+
 while IFS= read -r file; do
     log_info "Processing $file"
-    IFS="|" read -r OS MODE TOTAL PASSED FAILED < "$file"
-    rows+=("$OS|$MODE|$TOTAL|$PASSED|$FAILED")
-    TOTAL_SUM=$((TOTAL_SUM + TOTAL))
-    PASSED_SUM=$((PASSED_SUM + PASSED))
-    FAILED_SUM=$((FAILED_SUM + FAILED))
+    {
+        read -r header
+        IFS="|" read -r OS MODE TOTAL PASSED FAILED <<< "$header"
+        rows+=("$OS|$MODE|$TOTAL|$PASSED|$FAILED")
+        TOTAL_SUM=$((TOTAL_SUM + TOTAL))
+        PASSED_SUM=$((PASSED_SUM + PASSED))
+        FAILED_SUM=$((FAILED_SUM + FAILED))
+        
+        while read -r fail; do
+            FAILED_LIST_ALL+=("[$OS/$MODE] $fail")
+        done
+    } < "$file"
 done < <(find results -name "test_results.txt" 2>/dev/null || true)
 
 if [[ ${#rows[@]} -eq 0 ]]; then
@@ -34,4 +43,19 @@ else
 fi
 
 echo "| **TOTAL** | **ALL** | **$TOTAL_SUM** | **$PASSED_SUM** | **$FAILED_SUM** |" >> "$GITHUB_STEP_SUMMARY"
+
+if [[ ${#FAILED_LIST_ALL[@]} -gt 0 ]]; then
+    echo -e "\n### Failures Detail" >> "$GITHUB_STEP_SUMMARY"
+    echo '```' >> "$GITHUB_STEP_SUMMARY"
+    
+    echo -e "\n${RED}================ GLOBAL FAILURES SUMMARY ================${NC}"
+    for fail in "${FAILED_LIST_ALL[@]}"; do
+        echo -e "${RED}[FAIL]${NC} $fail"
+        echo "$fail" >> "$GITHUB_STEP_SUMMARY"
+    done
+    echo -e "${RED}========================================================${NC}\n"
+    
+    echo '```' >> "$GITHUB_STEP_SUMMARY"
+fi
+
 log_success "Summary generated."

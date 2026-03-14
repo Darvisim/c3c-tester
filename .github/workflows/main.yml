@@ -48,8 +48,22 @@ jobs:
         with:
           arch: x64
 
+      - name: Cache C3 Compiler Repo
+        uses: actions/cache@v4
+        with:
+          path: c3c
+          key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-c3c-repo-
+
       - name: Sync C3 Compiler
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
+
+      - name: Cache LLVM
+        uses: actions/cache@v4
+        with:
+          path: c3c/external
+          key: ${{ runner.os }}-llvm-${{ hashFiles('c3c/CMakeLists.txt') }}
 
       - name: Build Compiler
         run: ./scripts/compiler.sh
@@ -91,6 +105,14 @@ jobs:
         with:
           arch: x64
 
+      - name: Cache C3 Compiler Repo
+        uses: actions/cache/restore@v4
+        with:
+          path: c3c
+          key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-c3c-repo-
+
       - name: Sync C3 Compiler repo
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
@@ -99,6 +121,15 @@ jobs:
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
+
+      - name: Cache Vendor Repo
+        uses: actions/cache@v4
+        if: matrix.target == 'vendor'
+        with:
+          path: vendor
+          key: ${{ runner.os }}-vendor-repo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-vendor-repo-
 
       - name: Sync Vendor
         if: matrix.target == 'vendor'
