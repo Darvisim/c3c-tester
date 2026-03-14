@@ -20,7 +20,14 @@ FILES=()
 # Detect CPU cores
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 
-C3C=$(find c3c/build -maxdepth 1 -type f \( -name "c3c" -o -name "c3c.exe" \) | head -n1 || true)
+ROOT_DIR=$(pwd)
+
+C3C="$ROOT_DIR/c3c/build/c3c"
+
+# Windows fallback
+if [[ ! -x "$C3C" && -x "$ROOT_DIR/c3c/build/c3c.exe" ]]; then
+    C3C="$ROOT_DIR/c3c/build/c3c.exe"
+fi
 
 # Ensure compiler exists
 if [[ ! -x "$C3C" ]]; then
