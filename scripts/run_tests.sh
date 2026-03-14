@@ -88,6 +88,14 @@ progress_bar() {
     local full_blocks=$((filled_blocks / 8))
     local partial_block=$((filled_blocks % 8))
 
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        # In CI, don't use \r and only print every 5%
+        if [[ $(( current % (total / 20 + 1) )) -eq 0 || $current -eq $total ]]; then
+            printf "[%3d%%] (%d/%d)\n" "$percent" "$current" "$total"
+        fi
+        return
+    fi
+
     printf "\r["
 
     for ((i=0;i<full_blocks;i++)); do
@@ -137,9 +145,9 @@ compile_file() {
     echo "::endgroup::"
 
     if [[ $status -eq 0 ]]; then
-        echo "PASS|$file"
+        echo "RESULT:PASS|$file"
     else
-        echo "FAIL|$file"
+        echo "RESULT:FAIL|$file"
     fi
 }
 
@@ -150,20 +158,25 @@ COUNT=0
 
 printf "%s\n" "${FILES[@]}" |
 xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} |
-while IFS="|" read -r result file; do
+while read -r line; do
+    if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*) ]]; then
+        result="${BASH_REMATCH[1]}"
+        file="${BASH_REMATCH[2]}"
 
-    COUNT=$((COUNT+1))
+        COUNT=$((COUNT+1))
 
-    if [[ "$result" == "PASS" ]]; then
-        PASSED=$((PASSED+1))
-        echo "$file: Passed"
+        if [[ "$result" == "PASS" ]]; then
+            PASSED=$((PASSED+1))
+            echo "::notice file=$file::Passed"
+        else
+            FAILED=$((FAILED+1))
+            echo "::error file=$file::Failed"
+        fi
+
+        progress_bar "$COUNT" "$TOTAL"
     else
-        FAILED=$((FAILED+1))
-        echo "$file: Failed"
+        echo "$line"
     fi
-
-    progress_bar "$COUNT" "$TOTAL"
-
 done
 
 echo

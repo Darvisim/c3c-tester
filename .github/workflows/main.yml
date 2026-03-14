@@ -24,7 +24,7 @@ jobs:
         shell: bash
 
     steps:
-      - uses: &checkout actions/checkout@v4
+      - uses: &checkout actions/checkout@v5
 
       - name: Setup Dependencies
         run: |
@@ -52,7 +52,7 @@ jobs:
         run: ./scripts/compiler.sh
 
       - name: Upload compiler
-        uses: &upload actions/upload-artifact@v4
+        uses: &upload actions/upload-artifact@v6
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
@@ -87,7 +87,7 @@ jobs:
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
       - name: Download compiler
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
@@ -115,7 +115,7 @@ jobs:
       - uses: *checkout
 
       - name: Download all test results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: results
 
