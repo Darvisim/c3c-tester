@@ -68,7 +68,7 @@ progress_bar() {
     # ... and so on. We'll use a simpler bar for CI if needed, 
     # but the user wants the "shapes" replaced with hex codes.
     local full_char=$(printf "\xe2\x96\x88")
-    local parts=($(printf "\x20") 
+    local parts=(" " 
                   $(printf "\xe2\x96\x8f") 
                   $(printf "\xe2\x96\x8e") 
                   $(printf "\xe2\x96\x8d") 
@@ -84,13 +84,13 @@ progress_bar() {
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
         # In CI, only print every 5% to avoid log bloat, but show the bar
         if [[ $(( current % (total / 20 + 1) )) -eq 0 || $current -eq $total ]]; then
-            printf " [" "$percent"
+            printf " ["
             for ((i=0;i<full_blocks;i++)); do printf "%s" "$full_char"; done
             if (( full_blocks < width )); then
                 printf "%s" "${parts[$partial_block]}"
                 for ((i=full_blocks+1;i<width;i++)); do printf " "; done
             fi
-            printf "] [%3d%%] (%d/%d)\n" "$current" "$total"
+            printf "] [%3d%%] (%d/%d)\n" "$percent" "$current" "$total"
         fi
         return
     fi
