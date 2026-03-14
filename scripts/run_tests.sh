@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
 MODE="${1:-compiler}"
 
 OS="${RUNNER_OS:-unknown}"
@@ -131,7 +134,10 @@ progress_bar() {
     local total=$2
     local width=40
 
+    (( current > total )) && current=$total
+
     local percent=$(( current * 100 / total ))
+    (( percent > 100 )) && percent=100
 
     local parts=(" " "▏" "▎" "▍" "▌" "▋" "▊" "▉")
 
@@ -171,7 +177,7 @@ compile_file() {
 
     status=0
 
-    if grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
+    if grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file" 2>/dev/null; then
         output=$("$C3C" compile "$file" 2>&1) || status=$?
     else
 
@@ -211,10 +217,14 @@ export C3C
 COUNT=0
 
 printf "%s\n" "${FILES[@]}" |
-xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} |
+stdbuf -oL xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} |
 while IFS="|" read -r result file; do
 
     COUNT=$((COUNT+1))
+
+    if (( COUNT > TOTAL )); then
+        COUNT=$TOTAL
+    fi
 
     if [[ "$result" == "PASS" ]]; then
         PASSED=$((PASSED+1))

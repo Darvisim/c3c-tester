@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+RESULT_FILE="$RESULT_DIR/.test_results"
+
+# ensure artifact exists even if script fails
+echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
+
 echo "## C3 Test Results" >> "$GITHUB_STEP_SUMMARY"
 echo "" >> "$GITHUB_STEP_SUMMARY"
 
