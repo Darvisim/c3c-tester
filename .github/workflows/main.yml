@@ -83,14 +83,14 @@ jobs:
 
       - run: chmod +x scripts/*.sh || true
  
+      - name: Sync C3 Compiler repo
+        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
+
       - name: Download compiler
         uses: actions/download-artifact@v4
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
- 
-      - name: Sync C3 Compiler repo
-        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
       - name: Sync Vendor
         if: matrix.target == 'vendor'
