@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RESULT_FILE="$RESULT_DIR/.test_results"
-
-# ensure artifact exists even if script fails
-echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
+RESULT_DIR="results"
 
 echo "## C3 Test Results" >> "$GITHUB_STEP_SUMMARY"
 echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -28,14 +25,13 @@ while IFS= read -r file; do
     PASSED_SUM=$((PASSED_SUM + PASSED))
     FAILED_SUM=$((FAILED_SUM + FAILED))
 
-done < <(find results -name ".test_results" 2>/dev/null || true)
+done < <(find "$RESULT_DIR" -name ".test_results")
 
 IFS=$'\n' sorted=($(printf "%s\n" "${rows[@]}" | sort))
 unset IFS
 
 for row in "${sorted[@]}"; do
     IFS="|" read -r OS MODE TOTAL PASSED FAILED <<< "$row"
-
     echo "| $OS | $MODE | $TOTAL | $PASSED | $FAILED |" >> "$GITHUB_STEP_SUMMARY"
 done
 
