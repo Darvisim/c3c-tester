@@ -11,6 +11,7 @@ RESULT_DIR="results-${OS}-${MODE}"
 mkdir -p "$RESULT_DIR"
 
 RESULT_FILE="$RESULT_DIR/.test_results"
+echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
 
 PASSED=0
 FAILED=0
@@ -19,18 +20,15 @@ FILES=()
 # Detect CPU cores
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 
-C3C="./c3c/build/c3c"
+C3C=$(find c3c/build -maxdepth 1 -type f \( -name "c3c" -o -name "c3c.exe" \) | head -n1 || true)
 
 # Ensure compiler exists
 if [[ ! -x "$C3C" ]]; then
     echo "Compiler not found: $C3C"
-    echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
     exit 0
 fi
 
-############################################
-# Run upstream testproject (integration test)
-############################################
+chmod +x "$C3C" 2>/dev/null || true
 
 run_testproject() {
 
@@ -64,29 +62,18 @@ run_testproject() {
     popd > /dev/null
 }
 
-############################################
-# Configure search paths
-############################################
-
 if [[ "$MODE" == "compiler" ]]; then
-
     run_testproject
-
     SEARCH_DIRS=("c3c/resources" "c3c/test")
 
 elif [[ "$MODE" == "vendor" ]]; then
-
     SEARCH_DIRS=("vendor/libraries")
-
+    
 else
     echo "Unknown mode: $MODE"
     echo "$OS|$MODE|0|0|0" > "$RESULT_FILE"
     exit 0
 fi
-
-############################################
-# Collect test files
-############################################
 
 for dir in "${SEARCH_DIRS[@]}"; do
 
@@ -124,10 +111,6 @@ echo "Running C3 $MODE checks ($TOTAL files)"
 echo "Using $JOBS parallel jobs"
 echo
 
-############################################
-# Progress bar (1/8 block resolution)
-############################################
-
 progress_bar() {
 
     local current=$1
@@ -163,10 +146,6 @@ progress_bar() {
 
     printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
 }
-
-############################################
-# Compilation function
-############################################
 
 compile_file() {
 
@@ -209,10 +188,6 @@ compile_file() {
 
 export -f compile_file
 export C3C
-
-############################################
-# Run tests in parallel
-############################################
 
 COUNT=0
 
