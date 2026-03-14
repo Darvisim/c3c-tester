@@ -82,16 +82,14 @@ progress_bar() {
     local partial_block=$((filled_blocks % 8))
 
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        # In CI, only print every 5% to avoid log bloat, but show the bar
-        if [[ $(( current % (total / 20 + 1) )) -eq 0 || $current -eq $total ]]; then
-            printf " ["
-            for ((i=0;i<full_blocks;i++)); do printf "%s" "$full_char"; done
-            if (( full_blocks < width )); then
-                printf "%s" "${parts[$partial_block]}"
-                for ((i=full_blocks+1;i<width;i++)); do printf " "; done
-            fi
-            printf "] [%3d%%] (%d/%d)\n" "$percent" "$current" "$total"
+        # The user wants the bar after each test
+        printf " ["
+        for ((i=0;i<full_blocks;i++)); do printf "%s" "$full_char"; done
+        if (( full_blocks < width )); then
+            printf "%s" "${parts[$partial_block]}"
+            for ((i=full_blocks+1;i<width;i++)); do printf " "; done
         fi
+        printf "] [%3d%%] (%d/%d)\n" "$percent" "$current" "$total"
         return
     fi
 
@@ -146,12 +144,13 @@ printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' 
         COUNT=$((COUNT+1))
         if [[ "$result" == "PASS" ]]; then
             PASSED=$((PASSED+1))
-            echo "::notice file=$file::Passed"
+            log_success "$file: Passed"
         else
             FAILED=$((FAILED+1))
-            echo "::error file=$file::Failed"
+            log_error "$file: Failed"
         fi
         progress_bar "$COUNT" "$TOTAL"
+        echo "" # Space after each test
     else
         echo "$line"
     fi
