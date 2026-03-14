@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Make scripts executable
         run: chmod +x scripts/*.sh || true
@@ -80,7 +80,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Make scripts executable
         run: chmod +x scripts/*.sh || true
@@ -125,7 +125,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh || true
 
       - name: Download all test results
         uses: actions/download-artifact@v7

@@ -62,21 +62,41 @@ progress_bar() {
     local total=$2
     local width=40
     local percent=$(( current * 100 / total ))
+    # Hex codes for UTF-8 characters:
+    # █ -> \xe2\x96\x88
+    # ▏ -> \xe2\x96\x8f
+    # ... and so on. We'll use a simpler bar for CI if needed, 
+    # but the user wants the "shapes" replaced with hex codes.
+    local full_char=$(printf "\xe2\x96\x88")
+    local parts=($(printf "\x20") 
+                  $(printf "\xe2\x96\x8f") 
+                  $(printf "\xe2\x96\x8e") 
+                  $(printf "\xe2\x96\x8d") 
+                  $(printf "\xe2\x96\x8c") 
+                  $(printf "\xe2\x96\x8b") 
+                  $(printf "\xe2\x96\x8a") 
+                  $(printf "\xe2\x96\x89"))
 
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        if [[ $(( current % (total / 20 + 1) )) -eq 0 || $current -eq $total ]]; then
-            printf "[%3d%%] (%d/%d)\n" "$percent" "$current" "$total"
-        fi
-        return
-    fi
-
-    local parts=(" " "▏" "▎" "▍" "▌" "▋" "▊" "▉")
     local filled_blocks=$((percent * width * 8 / 100))
     local full_blocks=$((filled_blocks / 8))
     local partial_block=$((filled_blocks % 8))
 
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        # In CI, only print every 5% to avoid log bloat, but show the bar
+        if [[ $(( current % (total / 20 + 1) )) -eq 0 || $current -eq $total ]]; then
+            printf " [" "$percent"
+            for ((i=0;i<full_blocks;i++)); do printf "%s" "$full_char"; done
+            if (( full_blocks < width )); then
+                printf "%s" "${parts[$partial_block]}"
+                for ((i=full_blocks+1;i<width;i++)); do printf " "; done
+            fi
+            printf "] [%3d%%] (%d/%d)\n" "$current" "$total"
+        fi
+        return
+    fi
+
     printf "\r["
-    for ((i=0;i<full_blocks;i++)); do printf "█"; done
+    for ((i=0;i<full_blocks;i++)); do printf "%s" "$full_char"; done
     if (( full_blocks < width )); then
         printf "%s" "${parts[$partial_block]}"
         for ((i=full_blocks+1;i<width;i++)); do printf " "; done
@@ -90,8 +110,8 @@ compile_file() {
     local start=$(date +%s%N)
     local status=0
 
-    # Inject main if missing
-    if ! grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
+    # Inject main if missing. Robustly check for 'fn ... main('
+    if ! grep -Eq 'fn[[:space:]]+.*main[[:space:]]*\(' "$file"; then
         local tmp=$(mktemp "${TMPDIR:-/tmp}/c3tmpXXXXXX.${ext}")
         cp "$file" "$tmp"
         printf "\n// injected by CI\nfn void main() => 0;\n" >> "$tmp"
