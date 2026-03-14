@@ -36,6 +36,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh || true
+
       - name: Setup Dependencies
         run: ./scripts/setup.sh
 
@@ -78,6 +81,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh || true
 
       - name: Setup MSVC
         if: matrix.os == 'windows-latest'
