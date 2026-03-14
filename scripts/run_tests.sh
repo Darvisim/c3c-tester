@@ -6,6 +6,8 @@ RESULT_DIR="results-${PLATFORM}-${MODE}"
 mkdir -p "$RESULT_DIR"
 
 RESULT_FILE="$RESULT_DIR/test_results.txt"
+LOG_DIR="test_logs_${PLATFORM}_${MODE}"
+mkdir -p "$LOG_DIR"
 
 PASSED=0
 FAILED=0
@@ -63,54 +65,42 @@ progress_bar() {
     local total=$2
     local width=40
     local percent=$(( current * 100 / total ))
-    # Hex codes for UTF-8 characters:
-    # █ -> \xe2\x96\x88
-    # ▏ -> \xe2\x96\x8f
     local full_char=$(printf "\xe2\x96\x88")
-    local parts=(" " 
-                  $(printf "\xe2\x96\x8f") 
-                  $(printf "\xe2\x96\x8e") 
-                  $(printf "\xe2\x96\x8d") 
-                  $(printf "\xe2\x96\x8c") 
-                  $(printf "\xe2\x96\x8b") 
-                  $(printf "\xe2\x96\x8a") 
-                  $(printf "\xe2\x96\x89"))
 
-    local filled_blocks=$((percent * width * 8 / 100))
-    local full_blocks=$((filled_blocks / 8))
-    local partial_block=$((filled_blocks % 8))
+    local filled_blocks=$((percent * width / 100))
 
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
         printf " ["
-        for ((i=0;i<full_blocks;i++)); do printf "%s" "$full_char"; done
-        if (( full_blocks < width )); then
-            printf "%s" "${parts[$partial_block]}"
-            for ((i=full_blocks+1;i<width;i++)); do printf " "; done
-        fi
+        for ((i=0;i<filled_blocks;i++)); do printf "%s" "$full_char"; done
+        for ((i=filled_blocks;i<width;i++)); do printf " "; done
         printf "] [%3d%%] (%d/%d)\n" "$percent" "$current" "$total"
         return
     fi
 
     printf "\r["
-    for ((i=0;i<full_blocks;i++)); do printf "%s" "$full_char"; done
-    if (( full_blocks < width )); then
-        printf "%s" "${parts[$partial_block]}"
-        for ((i=full_blocks+1;i<width;i++)); do printf " "; done
-    fi
+    for ((i=0;i<filled_blocks;i++)); do printf "%s" "$full_char"; done
+    for ((i=filled_blocks;i<width;i++)); do printf " "; done
     printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
 }
 
 compile_file() {
     local file="$1"
+    local log_dir="$2"
     local ext="${file##*.}"
     local start=$(date +%s%N)
     local status=0
     local output=""
     local injected=0
+    
+    # Safe mktemp for macOS/Linux/Windows
+    local safe_fname=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
+    local log_file="${log_dir}/${safe_fname}.log"
 
-    # Improved main() detection. Look for 'fn [type] main('
+    # Improved main() detection
     if ! grep -Eq 'fn[[:space:]]+([[:alnum:]_<>\[\]*]+[[:space:]]+)?main[[:space:]]*\(' "$file"; then
-        local tmp=$(mktemp "${TMPDIR:-/tmp}/c3tmpXXXXXX.${ext}")
+        local tmp_dir="${TMPDIR:-/tmp}/c3c_tests"
+        mkdir -p "$tmp_dir"
+        local tmp="${tmp_dir}/$(basename "$file").${ext}"
         cp "$file" "$tmp"
         printf "\n// injected by CI\nfn void main() => 0;\n" >> "$tmp"
         output=$("$C3C" compile "$tmp" 2>&1) || status=$?
@@ -123,33 +113,42 @@ compile_file() {
     local end=$(date +%s%N)
     local duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
 
-    # Build the entire group block in a variable to ensure atomicity in parallel output
-    local block="::group::$file (${duration}s)\n"
-    if [[ $injected -eq 1 ]]; then
-        block+="$(log_info "main() was injected for this file.")\n"
-    fi
-    block+="${output}\n"
-    block+="::endgroup::\n"
+    # Write logs to file to ensure atomicity later
+    echo -e "$output" > "$log_file"
     
+    # Return compact status line
     if [[ $status -eq 0 ]]; then
-        block+="RESULT:PASS|$file"
+        echo "RESULT:PASS|$file|$duration|$injected"
     else
-        block+="RESULT:FAIL|$file"
+        echo "RESULT:FAIL|$file|$duration|$injected"
     fi
-    
-    echo -e "$block"
 }
 
 export -f compile_file log_info log_success log_warn log_error
 export C3C BLUE GREEN YELLOW RED NC
 
 COUNT=0
-printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} | while read -r line; do
-    if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*) ]]; then
-        result="${BASH_REMATCH[1]}"
+printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} "$LOG_DIR" | while read -r line; do
+    if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]]; then
+        res="${BASH_REMATCH[1]}"
         file="${BASH_REMATCH[2]}"
+        dur="${BASH_REMATCH[3]}"
+        inj="${BASH_REMATCH[4]}"
+        
+        safe_fname=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
+        log_file="${LOG_DIR}/${safe_fname}.log"
+        
         COUNT=$((COUNT+1))
-        if [[ "$result" == "PASS" ]]; then
+        
+        # Serialized atomic output
+        echo "::group::$file (${dur}s)"
+        if [[ "$inj" == "1" ]]; then
+            log_info "main() was injected for this file."
+        fi
+        cat "$log_file"
+        echo "::endgroup::"
+        
+        if [[ "$res" == "PASS" ]]; then
             PASSED=$((PASSED+1))
             log_success "$file: Passed"
         else
@@ -157,12 +156,15 @@ printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' 
             FAILED_LIST+=("$file")
             log_error "$file: Failed"
         fi
+        
         progress_bar "$COUNT" "$TOTAL"
-        echo "" # Space after each test
+        echo "" # Separation
     else
         echo "$line"
     fi
 done
+
+rm -rf "$LOG_DIR"
 
 echo -e "\n\nChecks complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
 

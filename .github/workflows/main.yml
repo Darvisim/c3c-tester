@@ -62,8 +62,10 @@ jobs:
       - name: Cache LLVM
         uses: actions/cache@v4
         with:
-          path: c3c/external
+          path: c3c/build/_deps
           key: ${{ runner.os }}-llvm-${{ hashFiles('c3c/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-llvm-
 
       - name: Build Compiler
         run: ./scripts/compiler.sh
