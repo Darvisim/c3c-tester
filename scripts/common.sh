@@ -19,7 +19,7 @@ log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
 OS="${RUNNER_OS:-$(uname -s)}"
 case "$OS" in
     Linux*)     PLATFORM="Linux" ;;
-    Darwin*)    PLATFORM="macOS" ;;
+    Darwin*|macOS*)    PLATFORM="macOS" ;;
     Windows*|MINGW*|MSYS*) PLATFORM="Windows" ;;
     *)          PLATFORM="Unknown" ;;
 esac
