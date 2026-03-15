@@ -66,20 +66,44 @@ if [[ "$MODE" == "integration" ]]; then
 
     # Pre-calculate TOTAL for integration tests
     TOTAL=2 # init and vendor-fetch are always run
+    if [ -d "$WORKDIR/resources/examples" ]; then
+        TOTAL=$((TOTAL + 27)) # 27 standard examples
+        [[ "$PLATFORM" == "Linux" ]] && TOTAL=$((TOTAL + 2)) # linux_stack
+        TOTAL=$((TOTAL + 1)) # cross constants
+    fi
     [ -d "$WORKDIR/resources/testfragments" ] && TOTAL=$((TOTAL + 1))
-    [ -d "$WORKDIR/resources/examples/staticlib-test" ] && TOTAL=$((TOTAL + 1))
-    [ -d "$WORKDIR/resources/examples/dynlib-test" ] && { [[ "$PLATFORM" == "Windows" || "$PLATFORM" != "macOS" || "$PLATFORM" != "Linux" ]] && TOTAL=$((TOTAL + 1)); }
-    [ -d "$WORKDIR/resources/testproject" ] && TOTAL=$((TOTAL + 1))
+    if [ -d "$WORKDIR/resources/examples/staticlib-test" ]; then
+        if [[ "$PLATFORM" == "Windows" ]]; then
+            TOTAL=$((TOTAL + 1))
+        else
+            TOTAL=$((TOTAL + 3)) # Build, CC Link, C3 Run
+        fi
+    fi
+    if [ -d "$WORKDIR/resources/examples/dynlib-test" ]; then
+        if [[ "$PLATFORM" == "Windows" ]]; then
+            TOTAL=$((TOTAL + 1))
+        elif [[ "$PLATFORM" == "Linux" ]]; then
+            TOTAL=$((TOTAL + 3)) # Build, CC Link, C3 Run
+        elif [[ "$PLATFORM" == "macOS" ]]; then
+            TOTAL=$((TOTAL + 2)) # Build, C3 Run
+        fi
+    fi
+    if [ -d "$WORKDIR/resources/testproject" ]; then
+        TOTAL=$((TOTAL + 1))
+        [[ "$PLATFORM" == "Windows" ]] && TOTAL=$((TOTAL + 2))
+    fi
     if [ -d "$WORKDIR/test/unit" ]; then
         if [[ "$PLATFORM" == "Windows" ]]; then
-            # On Windows we run modules individually, so count them
-            local mod_count=$(find "$WORKDIR/test/unit" -name "*.c3" -print0 | xargs -0 grep -h "^module .* @test" | awk '{print $2}' | sed 's/;//' | sort | uniq | wc -w)
+            mod_count=$(find "$WORKDIR/test/unit" -name "*.c3" -print0 | xargs -0 grep -h "^module .* @test" | awk '{print $2}' | sed 's/;//' | sort | uniq | wc -w)
             TOTAL=$((TOTAL + mod_count))
         else
             TOTAL=$((TOTAL + 1))
         fi
     fi
     [ -f "$WORKDIR/test/src/test_suite_runner.c3" ] && TOTAL=$((TOTAL + 1))
+    if [[ -d "$WORKDIR/resources/examples/raylib" && "$PLATFORM" != "Windows" ]]; then
+        TOTAL=$((TOTAL + 1))
+    fi
 
     run_int_test() {
         local name="$1"
@@ -117,60 +141,119 @@ if [[ "$MODE" == "integration" ]]; then
     # 1. CLI Basic Tests
     run_int_test "CLI: init" "\$C3C init-lib mylib && \$C3C init myproject" "$WORKDIR"
     
-    # 2. WASM Compilation
+    # 2. Standard Examples
+    if [ -d "$WORKDIR/resources/examples" ]; then
+        log_info "Running Standard Examples..."
+        EXAMPLES=(
+            "compile examples/base64.c3"
+            "compile examples/binarydigits.c3"
+            "compile examples/brainfk.c3"
+            "compile examples/factorial_macro.c3"
+            "compile examples/fasta.c3"
+            "compile examples/gameoflife.c3"
+            "compile examples/hash.c3"
+            "compile-only examples/levenshtein.c3"
+            "compile examples/load_world.c3"
+            "compile-only examples/map.c3"
+            "compile examples/mandelbrot.c3"
+            "compile examples/plus_minus.c3"
+            "compile examples/nbodies.c3"
+            "compile examples/spectralnorm.c3"
+            "compile examples/swap.c3"
+            "compile examples/contextfree/boolerr.c3"
+            "compile examples/contextfree/dynscope.c3"
+            "compile examples/contextfree/guess_number.c3"
+            "compile examples/contextfree/multi.c3"
+            "compile examples/contextfree/cleanup.c3"
+            "compile-run examples/hello_world_many.c3"
+            "compile-run examples/fannkuch-redux.c3"
+            "compile-run examples/contextfree/boolerr.c3"
+            "compile-run examples/load_world.c3"
+            "compile-run examples/process.c3"
+            "compile-run examples/ls.c3"
+            "compile-run examples/args.c3 -- foo -bar \"baz baz\""
+        )
+        for ex in "${EXAMPLES[@]}"; do
+            run_int_test "Example: $ex" "\$C3C $ex" "$WORKDIR/resources"
+        done
+
+        if [[ "$PLATFORM" == "Linux" ]]; then
+            run_int_test "Example: linux_stack (builtin)" "\$C3C compile-run --linker=builtin linux_stack.c3" "$WORKDIR/resources" "true"
+            run_int_test "Example: linux_stack" "\$C3C compile-run linux_stack.c3" "$WORKDIR/resources"
+        fi
+        
+        run_int_test "Example: Cross-compile constants" "\$C3C compile --no-entry --test -g --threads 1 --target macos-x64 examples/constants.c3" "$WORKDIR/resources"
+    fi
+
+    # 3. WASM Compilation
     if [ -d "$WORKDIR/resources/testfragments" ]; then
         run_int_test "WASM: Compile Check" "\$C3C compile --target wasm32 -g0 --no-entry -Os wasm4.c3" "$WORKDIR/resources/testfragments"
     fi
     
-    # 3. Static Library Tests
+    # 4. Static Library Tests
     if [ -d "$WORKDIR/resources/examples/staticlib-test" ]; then
         if [[ "$PLATFORM" == "Windows" ]]; then
             run_int_test "Static Lib: Build & Run" "\$C3C -vv static-lib add.c3 && \$C3C -vv compile-run test.c3 -l ./add.lib" "$WORKDIR/resources/examples/staticlib-test"
         else
-            run_int_test "Static Lib: Build & Run" "\$C3C -vv static-lib add.c3 -o libadd && \$C3C -vv compile-run test.c3 -L . -l add" "$WORKDIR/resources/examples/staticlib-test"
+            run_int_test "Static Lib: Build" "\$C3C -vv static-lib add.c3 -o libadd" "$WORKDIR/resources/examples/staticlib-test"
+            if [[ "$PLATFORM" == "Linux" ]]; then
+                run_int_test "Static Lib: CC Link" "cc test.c -L. -ladd -ldl -lm -lpthread -o a.out && ./a.out" "$WORKDIR/resources/examples/staticlib-test"
+            else
+                run_int_test "Static Lib: CC Link" "cc test.c -L. -ladd -o a.out && ./a.out" "$WORKDIR/resources/examples/staticlib-test"
+            fi
+            run_int_test "Static Lib: C3 Run" "\$C3C -vv compile-run test.c3 -L . -l add" "$WORKDIR/resources/examples/staticlib-test"
         fi
     fi
 
-    # 4. Dynamic Library Tests
+    # 5. Dynamic Library Tests
     if [ -d "$WORKDIR/resources/examples/dynlib-test" ]; then
-        if [[ "$PLATFORM" == "Windows" || ("$PLATFORM" != "macOS" && "$PLATFORM" != "Linux") ]]; then
+        if [[ "$PLATFORM" == "Windows" ]]; then
+            run_int_test "DynLib: Build & Run" "\$C3C -vv dynamic-lib add.c3 && \$C3C -vv compile-run test.c3 -l ./add.lib" "$WORKDIR/resources/examples/dynlib-test"
+        elif [[ "$PLATFORM" == "Linux" || "$PLATFORM" == "macOS" ]]; then
             run_int_test "DynLib: Build" "\$C3C -vv dynamic-lib add.c3" "$WORKDIR/resources/examples/dynlib-test"
+            if [[ "$PLATFORM" == "Linux" ]]; then
+                run_int_test "DynLib: CC Link" "cc test.c -L. -ladd -Wl,-rpath=. -o a.out && ./a.out" "$WORKDIR/resources/examples/dynlib-test"
+                run_int_test "DynLib: C3 Run" "\$C3C compile-run test.c3 -L . -l add -z -Wl,-rpath=." "$WORKDIR/resources/examples/dynlib-test"
+            elif [[ "$PLATFORM" == "macOS" ]]; then
+                run_int_test "DynLib: C3 Run" "\$C3C -vv compile-run test.c3 -l ./add.dylib" "$WORKDIR/resources/examples/dynlib-test"
+            fi
         fi
     fi
 
-    # 5. Project Tests
+    # 6. Project Tests
     if [ -d "$WORKDIR/resources/testproject" ]; then
         run_int_test "Project: run" "\$C3C run -vv --trust=full" "$WORKDIR/resources/testproject"
+        if [[ "$PLATFORM" == "Windows" ]]; then
+            run_int_test "Project: Win32 run" "\$C3C -vv --emit-llvm run hello_world_win32 --trust=full" "$WORKDIR/resources/testproject"
+            run_int_test "Project: Win32 lib build" "\$C3C -vv build hello_world_win32_lib --trust=full" "$WORKDIR/resources/testproject"
+        fi
     fi
     
-    # 6. Unit Tests
+    # 7. Unit Tests
     if [ -d "$WORKDIR/test/unit" ]; then
+        UNIT_ARGS="-O1"
+        UNIT_ARGS="$UNIT_ARGS -D SLOW_TESTS"
+        
         if [[ "$PLATFORM" == "Windows" ]]; then
             log_info "Windows detected: Running unit tests module by module for crash isolation..."
-            
-            # Discover modules
-            # We use find/grep to find all files with 'module ... @test'
-            local modules=$(find "$WORKDIR/test/unit" -name "*.c3" -print0 | xargs -0 grep -h "^module .* @test" | awk '{print $2}' | sed 's/;//' | sort | uniq)
-            local mod_count=$(echo "$modules" | wc -w)
-            log_info "Discovered $mod_count test modules."
-            
-            local mods_passed=0
-            local mods_failed=0
-            
+            modules=$(find "$WORKDIR/test/unit" -name "*.c3" -print0 | xargs -0 grep -h "^module .* @test" | awk '{print $2}' | sed 's/;//' | sort | uniq)
             for mod in $modules; do
-                run_int_test "Unit Tests: $mod" "\$C3C compile-test unit --test-filter $mod" "$WORKDIR/test" "true"
-                # Note: run_int_test updates global counters PASSED/FAILED/SOFT_FAILED
+                run_int_test "Unit Tests: $mod" "\$C3C compile-test unit $UNIT_ARGS --test-filter $mod" "$WORKDIR/test" "true"
             done
         else
-            run_int_test "Unit Tests: Base" "\$C3C compile-test unit" "$WORKDIR/test" "false"
+            run_int_test "Unit Tests: Base" "\$C3C compile-test unit $UNIT_ARGS" "$WORKDIR/test" "false"
         fi
     fi
     if [ -f "$WORKDIR/test/src/test_suite_runner.c3" ]; then
         run_int_test "Test Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$WORKDIR/test"
     fi
 
-    # 7. Vendor Fetch
+    # 8. Vendor Fetch & Raylib Example
     run_int_test "CLI: vendor-fetch" "\$C3C vendor-fetch raylib" "$WORKDIR"
+    if [[ -d "$WORKDIR/resources/examples/raylib" && "$PLATFORM" != "Windows" ]]; then
+         # Raylib on unix usually works in these CI envs if deps are there
+         run_int_test "CLI: raylib-arkanoid" "\$C3C compile --lib raylib --print-linking examples/raylib/raylib_arkanoid.c3" "$WORKDIR/resources"
+    fi
 
     rm -rf "$WORKDIR"
 else

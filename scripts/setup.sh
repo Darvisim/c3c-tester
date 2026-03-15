@@ -5,7 +5,7 @@ log_info "Setting up dependencies for $PLATFORM..."
 
 case "$PLATFORM" in
     Linux)
-        if ! command -v cmake &>/dev/null || ! command -v ninja &>/dev/null; then
+        if ! command -v cmake &>/dev/null || ! command -v ninja &>/dev/null || ! command -v curl &>/dev/null; then
             sudo apt-get update
             sudo apt-get install -y cmake ninja-build build-essential curl
         fi
