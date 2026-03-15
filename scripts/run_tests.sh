@@ -12,7 +12,7 @@ RESULT_FILE="$RESULT_DIR/test_results.txt"
 LOG_DIR="test_logs_${PLATFORM}_${MODE}"
 mkdir -p "$LOG_DIR"
 
-# Global Counters (Initialized at top to avoid unbound variable errors with set -u)
+# Global Counters (Initialized with safe increment values)
 PASSED=0
 FAILED=0
 COUNT=0
@@ -45,16 +45,19 @@ if [[ "$MODE" == "integration" ]]; then
         local start=$(date +%s%N)
         local status=0
         echo "::group::$name"
-        # Always use absolute path for compiler in eval
-        local resolved_cmd=$(echo "$cmd" | sed "s|\$C3C|$C3C|g")
+        # Always use absolute path for compiler in eval - use bash expansion for safety
+        local resolved_cmd="${cmd//\$C3C/$C3C}"
         (cd "$dir" && eval "$resolved_cmd") || status=$?
         echo "::endgroup::"
         local end=$(date +%s%N)
         local duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
         if [[ $status -eq 0 ]]; then
-            ((PASSED++)); log_success "$name: Passed ($duration s)"
+            PASSED=$((PASSED + 1))
+            log_success "$name: Passed ($duration s)"
         else
-            ((FAILED++)); FAILED_LIST+=("$name"); log_error "$name: Failed ($duration s)"
+            FAILED=$((FAILED + 1))
+            FAILED_LIST+=("$name")
+            log_error "$name: Failed ($duration s)"
         fi
     }
     
@@ -102,7 +105,7 @@ else
     log_info "Running C3 $MODE checks ($TOTAL files) using $JOBS parallel jobs"
 
     progress_bar() {
-        local current=$1; local total=$2; local width=40; local percent=$(( current * 100 / total ))
+        local current=$1; local total=$2; local width=40; local percent=$(( current * 100 / (total > 0 ? total : 1) ))
         local full_char=$(printf "\xe2\x96\x88")
         local filled_blocks=$((percent * width / 100))
         if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
@@ -145,16 +148,19 @@ else
     while read -r line; do
         if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]]; then
             res="${BASH_REMATCH[1]}"; file="${BASH_REMATCH[2]}"; dur="${BASH_REMATCH[3]}"; inj="${BASH_REMATCH[4]}"
-            ((COUNT++))
+            COUNT=$((COUNT + 1))
             echo "::group::$file ($dur s)"
             [[ "$inj" == "1" ]] && log_info "main() was injected."
             safe=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
             [ -f "${LOG_DIR}/${safe}.log" ] && cat "${LOG_DIR}/${safe}.log"
             echo "::endgroup::"
             if [[ "$res" == "PASS" ]]; then
-                ((PASSED++)); log_success "$file: Passed"
+                PASSED=$((PASSED + 1))
+                log_success "$file: Passed"
             else
-                ((FAILED++)); FAILED_LIST+=("$file"); log_error "$file: Failed"
+                FAILED=$((FAILED + 1))
+                FAILED_LIST+=("$file")
+                log_error "$file: Failed"
             fi
             progress_bar "$COUNT" "$TOTAL"
             echo ""
@@ -166,4 +172,6 @@ fi
 rm -rf "$LOG_DIR"
 echo -e "\nChecks complete. Total $TOTAL, $PASSED passed, $FAILED failed."
 echo "$PLATFORM|$MODE|$TOTAL|$PASSED|$FAILED" > "$RESULT_FILE"
-for fail in "${FAILED_LIST[@]+"${FAILED_LIST[@]}"}"; do echo "$fail" >> "$RESULT_FILE"; done
+for fail in "${FAILED_LIST[@]+"${FAILED_LIST[@]}"}"; do
+    echo "$fail" >> "$RESULT_FILE"
+done
