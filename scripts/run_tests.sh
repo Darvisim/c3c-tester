@@ -128,8 +128,9 @@ compile_file() {
 export -f compile_file log_info log_success log_warn log_error
 export C3C BLUE GREEN YELLOW RED NC
 
-COUNT=0
-# Use process substitution so while loop runs in main shell
+RESULTS_BUFFER="results_buffer_${PLATFORM}_${MODE}.txt"
+printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} "$LOG_DIR" > "$RESULTS_BUFFER"
+
 while read -r line; do
     if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]]; then
         res="${BASH_REMATCH[1]}"
@@ -147,7 +148,7 @@ while read -r line; do
         if [[ "$inj" == "1" ]]; then
             log_info "main() was injected for this file."
         fi
-        cat "$log_file"
+        [ -f "$log_file" ] && cat "$log_file"
         echo "::endgroup::"
         
         if [[ "$res" == "PASS" ]]; then
@@ -164,7 +165,9 @@ while read -r line; do
     else
         echo "$line"
     fi
-done < <(printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} "$LOG_DIR")
+done < "$RESULTS_BUFFER"
+
+rm -f "$RESULTS_BUFFER"
 
 rm -rf "$LOG_DIR"
 
