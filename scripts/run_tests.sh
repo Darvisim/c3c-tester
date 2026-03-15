@@ -290,7 +290,7 @@ else
         
         # Binary naming per user request: $filename (or $filename.exe on Windows)
         local base_name=$(basename "$file")
-        local bin_name="${base_name%.*}"
+        local bin_name="./${base_name%.*}"
         [[ "$PLATFORM" == "Windows" ]] && bin_name="${bin_name}.exe"
         
         # Retry logic for Windows "Unable to create temporary directory" error
