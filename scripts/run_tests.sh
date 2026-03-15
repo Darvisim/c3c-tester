@@ -12,7 +12,7 @@ RESULT_FILE="$RESULT_DIR/test_results.txt"
 LOG_DIR="test_logs_${PLATFORM}_${MODE}"
 mkdir -p "$LOG_DIR"
 
-# Global Counters (Initialized with safe increment values)
+# Global Counters
 PASSED=0
 FAILED=0
 COUNT=0
@@ -33,11 +33,38 @@ if [[ ! -f "$C3C" ]]; then
     exit 1
 fi
 
+progress_bar() {
+    local current=$1; local total=$2; local width=40; local percent=$(( current * 100 / (total > 0 ? total : 1) ))
+    local full_char=$(printf "\xe2\x96\x88")
+    local filled_blocks=$((percent * width / 100))
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        printf " ["
+        for ((i=0;i<filled_blocks;i++)); do printf "%s" "$full_char"; done
+        for ((i=filled_blocks;i<width;i++)); do printf " "; done
+        printf "] [%3d%%] (%d/%d)\n" "$percent" "$current" "$total"
+    else
+        printf "\r["
+        for ((i=0;i<filled_blocks;i++)); do printf "%s" "$full_char"; done
+        for ((i=filled_blocks;i<width;i++)); do printf " "; done
+        printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
+    fi
+}
+
 if [[ "$MODE" == "integration" ]]; then
     WORKDIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3_int_tests')
     log_info "Integration mode: using workspace $WORKDIR"
     [ -d "c3c/resources" ] && cp -r c3c/resources "$WORKDIR/"
-    
+    [ -d "c3c/test" ] && cp -r c3c/test "$WORKDIR/"
+
+    # Pre-calculate TOTAL for integration tests
+    TOTAL=2 # init and vendor-fetch are always run
+    [ -d "$WORKDIR/resources/testfragments" ] && TOTAL=$((TOTAL + 1))
+    [ -d "$WORKDIR/resources/examples/staticlib-test" ] && TOTAL=$((TOTAL + 1))
+    [ -d "$WORKDIR/resources/examples/dynlib-test" ] && { [[ "$PLATFORM" == "Windows" || "$PLATFORM" != "macOS" ]] && TOTAL=$((TOTAL + 1)); }
+    [ -d "$WORKDIR/resources/testproject" ] && TOTAL=$((TOTAL + 1))
+    [ -d "$WORKDIR/test/unit" ] && TOTAL=$((TOTAL + 1))
+    [ -f "$WORKDIR/test/src/test_suite_runner.c3" ] && TOTAL=$((TOTAL + 1))
+
     run_int_test() {
         local name="$1"
         local cmd="$2"
@@ -45,12 +72,14 @@ if [[ "$MODE" == "integration" ]]; then
         local start=$(date +%s%N)
         local status=0
         echo "::group::$name"
-        # Always use absolute path for compiler in eval - use bash expansion for safety
-        local resolved_cmd="${cmd//\$C3C/$C3C}"
+        # Safely escape the compiler path for eval
+        local escaped_c3c=$(printf '%q' "$C3C")
+        local resolved_cmd="${cmd//\$C3C/$escaped_c3c}"
         (cd "$dir" && eval "$resolved_cmd") || status=$?
         echo "::endgroup::"
         local end=$(date +%s%N)
         local duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
+        COUNT=$((COUNT + 1))
         if [[ $status -eq 0 ]]; then
             PASSED=$((PASSED + 1))
             log_success "$name: Passed ($duration s)"
@@ -59,12 +88,19 @@ if [[ "$MODE" == "integration" ]]; then
             FAILED_LIST+=("$name")
             log_error "$name: Failed ($duration s)"
         fi
+        progress_bar "$COUNT" "$TOTAL"
+        echo ""
     }
-    
+
+    # 1. CLI Basic Tests
     run_int_test "CLI: init" "\$C3C init-lib mylib && \$C3C init myproject" "$WORKDIR"
+    
+    # 2. WASM Compilation
     if [ -d "$WORKDIR/resources/testfragments" ]; then
         run_int_test "WASM: Compile Check" "\$C3C compile --target wasm32 -g0 --no-entry -Os wasm4.c3" "$WORKDIR/resources/testfragments"
     fi
+    
+    # 3. Static Library Tests
     if [ -d "$WORKDIR/resources/examples/staticlib-test" ]; then
         if [[ "$PLATFORM" == "Windows" ]]; then
             run_int_test "Static Lib: Build & Run" "\$C3C -vv static-lib add.c3 && \$C3C -vv compile-run test.c3 -l ./add.lib" "$WORKDIR/resources/examples/staticlib-test"
@@ -72,17 +108,37 @@ if [[ "$MODE" == "integration" ]]; then
             run_int_test "Static Lib: Build & Run" "\$C3C -vv static-lib add.c3 -o libadd && \$C3C -vv compile-run test.c3 -L . -l add" "$WORKDIR/resources/examples/staticlib-test"
         fi
     fi
+
+    # 4. Dynamic Library Tests
+    if [ -d "$WORKDIR/resources/examples/dynlib-test" ]; then
+        if [[ "$PLATFORM" == "Windows" ]]; then
+            run_int_test "DynLib: Build" "\$C3C -vv dynamic-lib add.c3" "$WORKDIR/resources/examples/dynlib-test"
+        elif [[ "$PLATFORM" != "macOS" ]]; then # Skip certain platforms for simplicity or known issues
+            run_int_test "DynLib: Build" "\$C3C -vv dynamic-lib add.c3" "$WORKDIR/resources/examples/dynlib-test"
+        fi
+    fi
+
+    # 5. Project Tests
     if [ -d "$WORKDIR/resources/testproject" ]; then
         run_int_test "Project: run" "\$C3C run -vv --trust=full" "$WORKDIR/resources/testproject"
     fi
-    run_int_test "CLI: vendor-fetch" "\$C3C vendor-fetch raylib" "$WORKDIR"
     
+    # 6. Unit Tests
+    if [ -d "$WORKDIR/test/unit" ]; then
+        run_int_test "Unit Tests: Base" "\$C3C compile-test unit" "$WORKDIR/test"
+    fi
+    if [ -f "$WORKDIR/test/src/test_suite_runner.c3" ]; then
+        run_int_test "Test Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$WORKDIR/test"
+    fi
+
+    # 7. Vendor Fetch
+    run_int_test "CLI: vendor-fetch" "\$C3C vendor-fetch raylib" "$WORKDIR"
+
     rm -rf "$WORKDIR"
-    TOTAL=$((PASSED + FAILED))
 else
     # File-based test modes (compiler, vendor)
     if [[ "$MODE" == "compiler" ]]; then
-        SEARCH_DIRS=("c3c/resources" "c3c/test")
+        SEARCH_DIRS=("c3c/lib/std" "c3c/benchmarks/stdlib")
     elif [[ "$MODE" == "vendor" ]]; then
         SEARCH_DIRS=("vendor/libraries")
     else
@@ -92,34 +148,26 @@ else
 
     for dir in "${SEARCH_DIRS[@]}"; do
         [ -d "$dir" ] || continue
-        while IFS= read -r -d '' file; do FILES+=("$file"); done < <(find "$dir" -type f \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -print0)
+        # Exclude directories explicitly handled by integration tests to reduce redundancy
+        while IFS= read -r -d '' file; do
+            FILES+=("$file")
+        done < <(find "$dir" -type f \
+            -not -path "*/testfragments/*" \
+            -not -path "*/testproject/*" \
+            -not -path "*/examples/*" \
+            -not -path "*/unit/*" \
+            -not -path "*/test_suite/*" \
+            \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -print0)
     done
 
     TOTAL=${#FILES[@]}
     if [[ "$TOTAL" -eq 0 ]]; then
-        log_warn "No test files found."
+        log_warn "No test files found for mode $MODE (after exclusions)."
         echo "$PLATFORM|$MODE|0|0|0" > "$RESULT_FILE"
         exit 0
     fi
 
     log_info "Running C3 $MODE checks ($TOTAL files) using $JOBS parallel jobs"
-
-    progress_bar() {
-        local current=$1; local total=$2; local width=40; local percent=$(( current * 100 / (total > 0 ? total : 1) ))
-        local full_char=$(printf "\xe2\x96\x88")
-        local filled_blocks=$((percent * width / 100))
-        if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-            printf " ["
-            for ((i=0;i<filled_blocks;i++)); do printf "%s" "$full_char"; done
-            for ((i=filled_blocks;i<width;i++)); do printf " "; done
-            printf "] [%3d%%] (%d/%d)\n" "$percent" "$current" "$total"
-        else
-            printf "\r["
-            for ((i=0;i<filled_blocks;i++)); do printf "%s" "$full_char"; done
-            for ((i=filled_blocks;i<width;i++)); do printf " "; done
-            printf "] %3d%% (%d/%d)" "$percent" "$current" "$total"
-        fi
-    }
 
     compile_one() {
         local file="$1"; local log_dir="$2"; local ext="${file##*.}"; local start=$(date +%s%N); local status=0; local output=""; local injected=0
@@ -143,6 +191,7 @@ else
     export C3C BLUE GREEN YELLOW RED NC
 
     RESULTS_BUFFER="results_buffer_${PLATFORM}_${MODE}.txt"
+    COUNT=0
     printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_one "$@"' _ {} "$LOG_DIR" > "$RESULTS_BUFFER"
 
     while read -r line; do
