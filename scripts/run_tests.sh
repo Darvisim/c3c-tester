@@ -205,12 +205,12 @@ if [[ "$MODE" == "integration" ]]; then
         if [[ "$PLATFORM" == "Windows" ]]; then
             run_int_test "DynLib: Build & Run" "\$C3C -vv dynamic-lib add.c3 && \$C3C -vv compile-run test.c3 -l ./add.lib" "$WORKDIR/resources/examples/dynlib-test"
         elif [[ "$PLATFORM" == "Linux" || "$PLATFORM" == "macOS" ]]; then
-            run_int_test "DynLib: Build" "\$C3C -vv dynamic-lib add.c3" "$WORKDIR/resources/examples/dynlib-test"
+            run_int_test "DynLib: Build" "\$C3C -vv dynamic-lib add.c3 -o libadd" "$WORKDIR/resources/examples/dynlib-test"
             if [[ "$PLATFORM" == "Linux" ]]; then
                 run_int_test "DynLib: CC Link" "cc test.c -L. -ladd -Wl,-rpath=. -o a.out && ./a.out" "$WORKDIR/resources/examples/dynlib-test"
                 run_int_test "DynLib: C3 Run" "\$C3C compile-run test.c3 -L . -l add -z -Wl,-rpath=." "$WORKDIR/resources/examples/dynlib-test"
             elif [[ "$PLATFORM" == "macOS" ]]; then
-                run_int_test "DynLib: C3 Run" "\$C3C -vv compile-run test.c3 -l ./add.dylib" "$WORKDIR/resources/examples/dynlib-test"
+                run_int_test "DynLib: C3 Run" "\$C3C -vv compile-run test.c3 -l ./libadd.dylib" "$WORKDIR/resources/examples/dynlib-test"
             fi
         fi
     fi
@@ -293,13 +293,27 @@ else
         local bin_name="${base_name%.*}"
         [[ "$PLATFORM" == "Windows" ]] && bin_name="${bin_name}.exe"
         
-        # Run compilation inside the unique job directory to avoid collisions
-        if ! grep -Eq 'fn[[:space:]]+.*[[:space:]]main[[:space:]]*\(' "$file" && ! grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
-            output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" "$abs_dummy" 2>&1) || status=$?
-            injected=1
-        else
-            output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" 2>&1) || status=$?
-        fi
+        # Retry logic for Windows "Unable to create temporary directory" error
+        local max_retries=3
+        local retry_count=0
+        while [[ $retry_count -lt $max_retries ]]; do
+            status=0
+            if ! grep -Eq 'fn[[:space:]]+.*[[:space:]]main[[:space:]]*\(' "$file" && ! grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
+                output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" "$abs_dummy" 2>&1) || status=$?
+                injected=1
+            else
+                output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" 2>&1) || status=$?
+                injected=0
+            fi
+            
+            if [[ $status -eq 0 ]] || [[ ! "$output" == *"Unable to create temporary directory"* ]]; then
+                break
+            fi
+            
+            # If we hit the collision error, wait a tiny bit and retry
+            retry_count=$((retry_count + 1))
+            sleep 0.5
+        done
         
         # Cleanup job dir
         rm -rf "$job_dir"
@@ -330,7 +344,11 @@ else
             echo "::group::$file ($dur s)"
             [[ "$inj" == "1" ]] && log_info "main() was injected via auxiliary file."
             safe=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
-            [ -f "${LOG_DIR}/${safe}.log" ] && cat "${LOG_DIR}/${safe}.log"
+            if [ -f "${LOG_DIR}/${safe}.log" ]; then
+                cat "${LOG_DIR}/${safe}.log"
+                # Ensure a newline after the log content to avoid group closing interleaving
+                echo ""
+            fi
             echo "::endgroup::"
             if [[ "$res" == "PASS" ]]; then
                 PASSED=$((PASSED + 1))
