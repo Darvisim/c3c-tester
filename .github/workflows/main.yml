@@ -140,12 +140,7 @@ jobs:
       - name: Run Tests
         id: tests
         continue-on-error: true
-        run: |
-          if [[ "${{ matrix.target }}" == "integration" ]]; then
-            ./scripts/integration.sh
-          else
-            ./scripts/run_tests.sh ${{ matrix.target }}
-          fi
+        run: ./scripts/run_tests.sh ${{ matrix.target }}
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v6

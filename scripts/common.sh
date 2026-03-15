@@ -24,31 +24,36 @@ case "$OS" in
     *)          PLATFORM="Unknown" ;;
 esac
 
-# Compiler path normalization with robust discovery
+# Compiler path normalization with robust absolute discovery
 get_c3c_path() {
     local base_path="./c3c/build/c3c"
     local bin_name="c3c"
-    if [[ "$PLATFORM" == "Windows" ]]; then
-        bin_name="c3c.exe"
-    fi
+    [[ "$PLATFORM" == "Windows" ]] && bin_name="c3c.exe"
 
-    local default_path="${base_path}${bin_name#c3c}"
+    local search_paths=(
+        "$base_path$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
+        "./c3c/build/Release/$bin_name"
+        "./c3c/build/Debug/$bin_name"
+        "./c3c/build/bin/$bin_name"
+    )
     
-    # 1. Try default path
-    if [[ -f "$default_path" ]]; then
-        echo "$default_path"
-        return
-    fi
+    # 1. Try known paths
+    for p in "${search_paths[@]}"; do
+        if [[ -f "$p" ]]; then
+            echo "$(realpath "$p")"
+            return
+        fi
+    done
     
-    # 2. Try searching in the build directory (handles Release/, bin/, etc.)
+    # 2. Try generic search in build dir
     local found=$(find ./c3c/build -name "$bin_name" -type f | head -n 1)
     if [[ -n "$found" ]]; then
-        echo "$found"
+        echo "$(realpath "$found")"
         return
     fi
     
-    # 3. Fallback to default path (for error reporting later)
-    echo "$default_path"
+    # 3. Fallback to default
+    realpath "$base_path$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")" 2>/dev/null || echo "$base_path"
 }
 
 # Ensure execution permissions on Unix

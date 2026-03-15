@@ -17,17 +17,24 @@ FAILED_LIST_ALL=()
 
 while IFS= read -r file; do
     log_info "Processing $file"
+    if [ ! -s "$file" ]; then
+        log_warn "File $file is empty or missing. Skipping."
+        continue
+    fi
     {
-        read -r header
-        IFS="|" read -r OS MODE TOTAL PASSED FAILED <<< "$header"
-        rows+=("$OS|$MODE|$TOTAL|$PASSED|$FAILED")
-        TOTAL_SUM=$((TOTAL_SUM + TOTAL))
-        PASSED_SUM=$((PASSED_SUM + PASSED))
-        FAILED_SUM=$((FAILED_SUM + FAILED))
-        
-        while read -r fail; do
-            FAILED_LIST_ALL+=("[$OS/$MODE] $fail")
-        done
+        if read -r header; then
+            IFS="|" read -r OS MODE TOTAL PASSED FAILED <<< "$header"
+            if [[ -n "$OS" && -n "$MODE" ]]; then
+                rows+=("$OS|$MODE|$TOTAL|$PASSED|$FAILED")
+                TOTAL_SUM=$((TOTAL_SUM + TOTAL))
+                PASSED_SUM=$((PASSED_SUM + PASSED))
+                FAILED_SUM=$((FAILED_SUM + FAILED))
+                
+                while read -r fail; do
+                    FAILED_LIST_ALL+=("[$OS/$MODE] $fail")
+                done
+            fi
+        fi
     } < "$file"
 done < <(find results -name "test_results.txt" 2>/dev/null || true)
 
