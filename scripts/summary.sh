@@ -3,6 +3,11 @@ source "$(dirname "$0")/common.sh"
 
 log_info "Generating test summary..."
 
+# Safely handle missing GITHUB_STEP_SUMMARY
+if [[ -z "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    GITHUB_STEP_SUMMARY="/dev/null"
+fi
+
 echo "## C3 Test Results ($PLATFORM)" >> "$GITHUB_STEP_SUMMARY"
 echo "" >> "$GITHUB_STEP_SUMMARY"
 echo "| OS | Target | Total | Passed | Failed |" >> "$GITHUB_STEP_SUMMARY"

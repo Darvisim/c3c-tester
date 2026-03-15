@@ -5,18 +5,24 @@ log_info "Setting up dependencies for $PLATFORM..."
 
 case "$PLATFORM" in
     Linux)
-        sudo apt-get update
-        sudo apt-get install -y cmake ninja-build build-essential curl
+        if ! command -v cmake &>/dev/null || ! command -v ninja &>/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y cmake ninja-build build-essential curl
+        fi
         ;;
     macOS)
         for pkg in cmake ninja; do
-            if ! brew list "$pkg" &>/dev/null; then
-                brew install "$pkg"
+            if ! command -v "$pkg" &>/dev/null; then
+                if ! brew list "$pkg" &>/dev/null; then
+                    brew install "$pkg"
+                fi
             fi
         done
         ;;
     Windows)
-        choco install cmake ninja -y
+        if ! command -v cmake &>/dev/null || ! command -v ninja &>/dev/null; then
+            choco install cmake ninja -y
+        fi
         ;;
     *)
         log_error "Unsupported platform: $PLATFORM"

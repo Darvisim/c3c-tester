@@ -2,6 +2,7 @@
 source "$(dirname "$0")/common.sh"
 
 # DISABLE set -e to allow script to continue through failures and use our lenient exit logic
+# This ensures that one crashing test (like blake2) doesn't stop the whole suite.
 set +e
 # Relax pipefail temporarily if it causes issues during parallel output processing
 set +o pipefail
@@ -25,7 +26,6 @@ FAILED_LIST=()
 SOFT_FAILED_LIST=()
 
 # STRICT=false: Exit with 0 even if tests fail (avoids "Process completed with exit code 1" in GHA)
-# Default is false to satisfy user's request for clean GHA status.
 STRICT_MODE="${STRICT_MODE:-false}"
 
 # Detect CPU cores
@@ -70,7 +70,15 @@ if [[ "$MODE" == "integration" ]]; then
     [ -d "$WORKDIR/resources/examples/staticlib-test" ] && TOTAL=$((TOTAL + 1))
     [ -d "$WORKDIR/resources/examples/dynlib-test" ] && { [[ "$PLATFORM" == "Windows" || "$PLATFORM" != "macOS" || "$PLATFORM" != "Linux" ]] && TOTAL=$((TOTAL + 1)); }
     [ -d "$WORKDIR/resources/testproject" ] && TOTAL=$((TOTAL + 1))
-    [ -d "$WORKDIR/test/unit" ] && TOTAL=$((TOTAL + 1))
+    if [ -d "$WORKDIR/test/unit" ]; then
+        if [[ "$PLATFORM" == "Windows" ]]; then
+            # On Windows we run modules individually, so count them
+            local mod_count=$(find "$WORKDIR/test/unit" -name "*.c3" -print0 | xargs -0 grep -h "^module .* @test" | awk '{print $2}' | sed 's/;//' | sort | uniq | wc -w)
+            TOTAL=$((TOTAL + mod_count))
+        else
+            TOTAL=$((TOTAL + 1))
+        fi
+    fi
     [ -f "$WORKDIR/test/src/test_suite_runner.c3" ] && TOTAL=$((TOTAL + 1))
 
     run_int_test() {
@@ -81,7 +89,6 @@ if [[ "$MODE" == "integration" ]]; then
         local start=$(date +%s%N)
         local status=0
         echo "::group::$name"
-        # Safely escape the compiler path for eval
         local escaped_c3c=$(printf '%q' "$C3C")
         local resolved_cmd="${cmd//\$C3C/$escaped_c3c}"
         (cd "$dir" && eval "$resolved_cmd") || status=$?
@@ -126,7 +133,6 @@ if [[ "$MODE" == "integration" ]]; then
 
     # 4. Dynamic Library Tests
     if [ -d "$WORKDIR/resources/examples/dynlib-test" ]; then
-        # Skip certain platforms for simplicity or known issues
         if [[ "$PLATFORM" == "Windows" || ("$PLATFORM" != "macOS" && "$PLATFORM" != "Linux") ]]; then
             run_int_test "DynLib: Build" "\$C3C -vv dynamic-lib add.c3" "$WORKDIR/resources/examples/dynlib-test"
         fi
@@ -139,9 +145,25 @@ if [[ "$MODE" == "integration" ]]; then
     
     # 6. Unit Tests
     if [ -d "$WORKDIR/test/unit" ]; then
-        soft_unit="false"
-        [[ "$PLATFORM" == "Windows" ]] && soft_unit="true"
-        run_int_test "Unit Tests: Base" "\$C3C compile-test unit" "$WORKDIR/test" "$soft_unit"
+        if [[ "$PLATFORM" == "Windows" ]]; then
+            log_info "Windows detected: Running unit tests module by module for crash isolation..."
+            
+            # Discover modules
+            # We use find/grep to find all files with 'module ... @test'
+            local modules=$(find "$WORKDIR/test/unit" -name "*.c3" -print0 | xargs -0 grep -h "^module .* @test" | awk '{print $2}' | sed 's/;//' | sort | uniq)
+            local mod_count=$(echo "$modules" | wc -w)
+            log_info "Discovered $mod_count test modules."
+            
+            local mods_passed=0
+            local mods_failed=0
+            
+            for mod in $modules; do
+                run_int_test "Unit Tests: $mod" "\$C3C compile-test unit --test-filter $mod" "$WORKDIR/test" "true"
+                # Note: run_int_test updates global counters PASSED/FAILED/SOFT_FAILED
+            done
+        else
+            run_int_test "Unit Tests: Base" "\$C3C compile-test unit" "$WORKDIR/test" "false"
+        fi
     fi
     if [ -f "$WORKDIR/test/src/test_suite_runner.c3" ]; then
         run_int_test "Test Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$WORKDIR/test"
@@ -164,7 +186,6 @@ else
 
     for dir in "${SEARCH_DIRS[@]}"; do
         [ -d "$dir" ] || continue
-        # Exclude directories explicitly handled by integration tests to reduce redundancy
         while IFS= read -r -d '' file; do
             FILES+=("$file")
         done < <(find "$dir" -type f \
@@ -185,15 +206,17 @@ else
 
     log_info "Running C3 $MODE checks ($TOTAL files) using $JOBS parallel jobs"
 
+    # Pre-create the build directory to avoid race conditions when parallel instances try to create it simultaneously.
+    mkdir -p "build"
+
     compile_one() {
         local file="$1"; local log_dir="$2"; local ext="${file##*.}"; local start=$(date +%s%N); local status=0; local output=""; local injected=0
         local abs_file=$(realpath "$file" 2>/dev/null || echo "$file")
         local abs_dummy=$(realpath "$DUMMY_MAIN_FILE" 2>/dev/null || echo "$DUMMY_MAIN_FILE")
         
-        # Isolation: Instead of cd-ing into a temp dir (which can break std library discovery),
-        # we tell c3c to use a unique output path.
-        local test_safe_name=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
-        local out_bin="test_bin_${test_safe_name}"
+        # Use filename as binary name for cleaner output, but keep it unique enough in case of name collisions.
+        local base_name=$(basename "$file")
+        local out_bin="out_${base_name%.*}"
         
         if ! grep -Eq 'fn[[:space:]]+.*[[:space:]]main[[:space:]]*\(' "$file" && ! grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
             output=$("$C3C" compile -o "$out_bin" "$abs_file" "$abs_dummy" 2>&1) || status=$?
@@ -214,7 +237,6 @@ else
     export -f compile_one log_info log_success log_warn log_error
     export C3C BLUE GREEN YELLOW RED NC
 
-    # Create dummy main once for parallel jobs to use
     DUMMY_MAIN_FILE="$(realpath "$RESULT_DIR")/_dummy_main.c3"
     echo "fn void main() => 0;" > "$DUMMY_MAIN_FILE"
     export DUMMY_MAIN_FILE
@@ -256,8 +278,6 @@ for fail in "${FAILED_LIST[@]+"${FAILED_LIST[@]}"}"; do
     echo "$fail" >> "$RESULT_FILE"
 done
 
-# If STRICT_MODE is true, exit with error if hard failures occurred.
-# Default is false to satisfy user's request for clean GHA status.
 if [[ "$STRICT_MODE" == "true" && $FAILED -gt 0 ]]; then
     exit 1
 fi

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+source "$(dirname "$0")/common.sh"
 set -euo pipefail
 
 REPO_URL="$1"
@@ -7,21 +8,21 @@ DIR="$2"
 echo "::group::Syncing $DIR"
 
 if [ -d "$DIR/.git" ]; then
-    echo "Updating existing repo"
+    log_info "Updating existing repo in $DIR"
     git -C "$DIR" fetch origin
     git -C "$DIR" reset --hard origin/HEAD
 
 elif [ -d "$DIR" ]; then
-    echo "Directory exists but is not a git repo. Recreating..."
+    log_warn "Directory $DIR exists but is not a git repo. Recreating..."
     rm -rf "$DIR"
     git clone --depth 1 "$REPO_URL" "$DIR"
 
 else
-    echo "Cloning $REPO_URL"
+    log_info "Cloning $REPO_URL into $DIR"
     git clone --depth 1 "$REPO_URL" "$DIR"
 fi
 
-COMMIT=$(git -C "$DIR" rev-parse --short HEAD)
-echo "$DIR commit: $COMMIT"
+COMMIT=$(git -C "$DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+log_success "$DIR sync complete (commit: $COMMIT)"
 
 echo "::endgroup::"
