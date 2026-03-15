@@ -18,12 +18,10 @@ mkdir -p "$LOG_DIR"
 # Global Counters
 PASSED=0
 FAILED=0
-SOFT_FAILED=0
 COUNT=0
 TOTAL=0
 FILES=()
 FAILED_LIST=()
-SOFT_FAILED_LIST=()
 
 # STRICT=false: Exit with 0 even if tests fail (avoids "Process completed with exit code 1" in GHA)
 STRICT_MODE="${STRICT_MODE:-false}"
@@ -67,7 +65,9 @@ if [[ "$MODE" == "integration" ]]; then
     # Pre-calculate TOTAL for integration tests
     TOTAL=2 # init and vendor-fetch are always run
     if [ -d "$WORKDIR/resources/examples" ]; then
-        TOTAL=$((TOTAL + 27)) # 27 standard examples
+        # Dynamically count all examples excluding some libs
+        EX_COUNT=$(find "$WORKDIR/resources/examples" -maxdepth 2 -name "*.c3" -not -path "*/staticlib-test/*" -not -path "*/dynlib-test/*" -not -path "*/raylib/*" | wc -l)
+        TOTAL=$((TOTAL + EX_COUNT))
         [[ "$PLATFORM" == "Linux" ]] && TOTAL=$((TOTAL + 2)) # linux_stack
         TOTAL=$((TOTAL + 1)) # cross constants
     fi
@@ -104,7 +104,6 @@ if [[ "$MODE" == "integration" ]]; then
         local name="$1"
         local cmd="$2"
         local dir="${3:-.}"
-        local soft_fail="${4:-false}"
         local start=$(date +%s%N)
         local status=0
         echo "::group::$name"
@@ -119,15 +118,9 @@ if [[ "$MODE" == "integration" ]]; then
             PASSED=$((PASSED + 1))
             log_success "$name: Passed ($duration s)"
         else
-            if [[ "$soft_fail" == "true" ]]; then
-                SOFT_FAILED=$((SOFT_FAILED + 1))
-                SOFT_FAILED_LIST+=("$name")
-                log_warn "$name: Failed (Soft Failure) ($duration s)"
-            else
-                FAILED=$((FAILED + 1))
-                FAILED_LIST+=("$name")
-                log_error "$name: Failed ($duration s)"
-            fi
+            FAILED=$((FAILED + 1))
+            FAILED_LIST+=("$name")
+            log_error "$name: Failed ($duration s)"
         fi
         progress_bar "$COUNT" "$TOTAL"
         echo ""
@@ -139,41 +132,20 @@ if [[ "$MODE" == "integration" ]]; then
     # 2. Standard Examples
     if [ -d "$WORKDIR/resources/examples" ]; then
         log_info "Running Standard Examples..."
-        EXAMPLES=(
-            "compile examples/base64.c3"
-            "compile examples/binarydigits.c3"
-            "compile examples/brainfk.c3"
-            "compile examples/factorial_macro.c3"
-            "compile examples/fasta.c3"
-            "compile examples/gameoflife.c3"
-            "compile examples/hash.c3"
-            "compile-only examples/levenshtein.c3"
-            "compile examples/load_world.c3"
-            "compile-only examples/map.c3"
-            "compile examples/mandelbrot.c3"
-            "compile examples/plus_minus.c3"
-            "compile examples/nbodies.c3"
-            "compile examples/spectralnorm.c3"
-            "compile examples/swap.c3"
-            "compile examples/contextfree/boolerr.c3"
-            "compile examples/contextfree/dynscope.c3"
-            "compile examples/contextfree/guess_number.c3"
-            "compile examples/contextfree/multi.c3"
-            "compile examples/contextfree/cleanup.c3"
-            "compile-run examples/hello_world_many.c3"
-            "compile-run examples/fannkuch-redux.c3"
-            "compile-run examples/contextfree/boolerr.c3"
-            "compile-run examples/load_world.c3"
-            "compile-run examples/process.c3"
-            "compile-run examples/ls.c3"
-            "compile-run examples/args.c3 -- foo -bar \"baz baz\""
-        )
-        for ex in "${EXAMPLES[@]}"; do
-            run_int_test "Example: $ex" "\$C3C $ex" "$WORKDIR/resources"
+        # Dynamically discover all top-level examples
+        mapfile -t EXAMPLES < <(find "$WORKDIR/resources/examples" -maxdepth 2 -name "*.c3" -not -path "*/staticlib-test/*" -not -path "*/dynlib-test/*" -not -path "*/raylib/*" | sort)
+        for ex_path in "${EXAMPLES[@]}"; do
+            local rel_ex=$(realpath --relative-to="$WORKDIR/resources" "$ex_path")
+            # Default to compile, but run some specific ones if named appropriately or just compile all
+            if [[ "$rel_ex" == *"hello_world"* || "$rel_ex" == *"process"* ]]; then
+                run_int_test "Example: $rel_ex" "\$C3C compile-run $rel_ex" "$WORKDIR/resources"
+            else
+                run_int_test "Example: $rel_ex" "\$C3C compile $rel_ex" "$WORKDIR/resources"
+            fi
         done
 
         if [[ "$PLATFORM" == "Linux" ]]; then
-            run_int_test "Example: linux_stack (builtin)" "\$C3C compile-run --linker=builtin linux_stack.c3" "$WORKDIR/resources" "true"
+            run_int_test "Example: linux_stack (builtin)" "\$C3C compile-run --linker=builtin linux_stack.c3" "$WORKDIR/resources"
             run_int_test "Example: linux_stack" "\$C3C compile-run linux_stack.c3" "$WORKDIR/resources"
         fi
         
@@ -227,7 +199,7 @@ if [[ "$MODE" == "integration" ]]; then
     # 7. Unit Tests
     if [ -d "$WORKDIR/test/unit" ]; then
         UNIT_ARGS="-O1 -D SLOW_TESTS"
-        run_int_test "Unit Tests: Base" "\$C3C compile-test unit $UNIT_ARGS" "$WORKDIR/test" "false"
+        run_int_test "Unit Tests: Base" "\$C3C compile-test unit $UNIT_ARGS" "$WORKDIR/test"
     fi
     if [ -f "$WORKDIR/test/src/test_suite_runner.c3" ]; then
         run_int_test "Test Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$WORKDIR/test"
@@ -265,6 +237,10 @@ else
             \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -print0)
     done
 
+    # Sort files alphabetically
+    IFS=$'\n' FILES=($(printf "%s\n" "${FILES[@]}" | sort))
+    unset IFS
+
     TOTAL=${#FILES[@]}
     if [[ "$TOTAL" -eq 0 ]]; then
         log_warn "No test files found for mode $MODE (after exclusions)."
@@ -298,7 +274,8 @@ else
         local retry_count=0
         while [[ $retry_count -lt $max_retries ]]; do
             status=0
-            if ! grep -Eq 'fn[[:space:]]+.*[[:space:]]main[[:space:]]*\(' "$file" && ! grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
+            # Refined main() detection regex to avoid false positives/negatives
+            if ! grep -Eq 'fn\s+(void|int|u?[0-9]+)?\s*main\s*\(' "$file"; then
                 output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" "$abs_dummy" 2>&1) || status=$?
                 injected=1
             else
@@ -319,7 +296,9 @@ else
         rm -rf "$job_dir"
         
         local end=$(date +%s%N); local dur=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
-        local safe=$(echo "$file" | sed 's/[^[:alnum:]]/_/g'); echo -e "$output" > "${log_dir}/${safe}.log"
+        local safe=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
+        # Use printf %s to avoid interpretation of escape sequences like \t in paths
+        printf "%s\n" "$output" > "${log_dir}/${safe}.log"
         if [[ $status -eq 0 ]]; then
             echo "RESULT:PASS|$file|$dur|$injected"
         else
@@ -368,7 +347,6 @@ fi
 
 rm -rf "$LOG_DIR"
 echo -e "\nChecks complete. Total $TOTAL, $PASSED passed, $FAILED failed."
-[[ $SOFT_FAILED -gt 0 ]] && echo "Soft failures: $SOFT_FAILED (Ignored in status count)"
 
 echo "$PLATFORM|$MODE|$TOTAL|$PASSED|$FAILED" > "$RESULT_FILE"
 for fail in "${FAILED_LIST[@]+"${FAILED_LIST[@]}"}"; do
