@@ -135,7 +135,7 @@ if [[ "$MODE" == "integration" ]]; then
     # 6. Unit Tests (Marked as soft-fail on Windows if requested/necessary, but let's keep it global for now if user asks)
     if [ -d "$WORKDIR/test/unit" ]; then
         # Check if we should soft-fail this specific test on this platform
-        local soft_unit="false"
+        soft_unit="false"
         [[ "$PLATFORM" == "Windows" ]] && soft_unit="true" # Suppress unit test failure on Windows as per user's likely intent
         run_int_test "Unit Tests: Base" "\$C3C compile-test unit" "$WORKDIR/test" "$soft_unit"
     fi
