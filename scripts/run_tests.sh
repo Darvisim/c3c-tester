@@ -132,11 +132,10 @@ if [[ "$MODE" == "integration" ]]; then
         run_int_test "Project: run" "\$C3C run -vv --trust=full" "$WORKDIR/resources/testproject"
     fi
     
-    # 6. Unit Tests (Marked as soft-fail on Windows if requested/necessary, but let's keep it global for now if user asks)
+    # 6. Unit Tests
     if [ -d "$WORKDIR/test/unit" ]; then
-        # Check if we should soft-fail this specific test on this platform
         soft_unit="false"
-        [[ "$PLATFORM" == "Windows" ]] && soft_unit="true" # Suppress unit test failure on Windows as per user's likely intent
+        [[ "$PLATFORM" == "Windows" ]] && soft_unit="true"
         run_int_test "Unit Tests: Base" "\$C3C compile-test unit" "$WORKDIR/test" "$soft_unit"
     fi
     if [ -f "$WORKDIR/test/src/test_suite_runner.c3" ]; then
@@ -184,14 +183,21 @@ else
     compile_one() {
         local file="$1"; local log_dir="$2"; local ext="${file##*.}"; local start=$(date +%s%N); local status=0; local output=""; local injected=0
         local abs_file=$(realpath "$file" 2>/dev/null || echo "$file")
+        local abs_dummy=$(realpath "$DUMMY_MAIN_FILE" 2>/dev/null || echo "$DUMMY_MAIN_FILE")
+        
+        # Isolation: Use a unique working directory for each parallel build to avoid 'build/' folder collisions.
+        local test_safe_name=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
+        local test_workdir="work_${PLATFORM}_${MODE}_${test_safe_name}"
+        mkdir -p "$test_workdir"
         
         if ! grep -Eq 'fn[[:space:]]+.*[[:space:]]main[[:space:]]*\(' "$file" && ! grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
-            output=$("$C3C" compile "$abs_file" "$DUMMY_MAIN_FILE" 2>&1) || status=$?
+            output=$(cd "$test_workdir" && "$C3C" compile "$abs_file" "$abs_dummy" 2>&1) || status=$?
             injected=1
         else
-            output=$("$C3C" compile "$abs_file" 2>&1) || status=$?
+            output=$(cd "$test_workdir" && "$C3C" compile "$abs_file" 2>&1) || status=$?
         fi
         
+        rm -rf "$test_workdir"
         local end=$(date +%s%N); local dur=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
         local safe=$(echo "$file" | sed 's/[^[:alnum:]]/_/g'); echo -e "$output" > "${log_dir}/${safe}.log"
         if [[ $status -eq 0 ]]; then
