@@ -93,12 +93,7 @@ if [[ "$MODE" == "integration" ]]; then
         [[ "$PLATFORM" == "Windows" ]] && TOTAL=$((TOTAL + 2))
     fi
     if [ -d "$WORKDIR/test/unit" ]; then
-        if [[ "$PLATFORM" == "Windows" ]]; then
-            mod_count=$(find "$WORKDIR/test/unit" -name "*.c3" -print0 | xargs -0 grep -h "^module .* @test" | awk '{print $2}' | sed 's/;//' | sort | uniq | wc -w)
-            TOTAL=$((TOTAL + mod_count))
-        else
-            TOTAL=$((TOTAL + 1))
-        fi
+        TOTAL=$((TOTAL + 1))
     fi
     [ -f "$WORKDIR/test/src/test_suite_runner.c3" ] && TOTAL=$((TOTAL + 1))
     if [[ -d "$WORKDIR/resources/examples/raylib" && "$PLATFORM" != "Windows" ]]; then
@@ -231,18 +226,8 @@ if [[ "$MODE" == "integration" ]]; then
     
     # 7. Unit Tests
     if [ -d "$WORKDIR/test/unit" ]; then
-        UNIT_ARGS="-O1"
-        UNIT_ARGS="$UNIT_ARGS -D SLOW_TESTS"
-        
-        if [[ "$PLATFORM" == "Windows" ]]; then
-            log_info "Windows detected: Running unit tests module by module for crash isolation..."
-            modules=$(find "$WORKDIR/test/unit" -name "*.c3" -print0 | xargs -0 grep -h "^module .* @test" | awk '{print $2}' | sed 's/;//' | sort | uniq)
-            for mod in $modules; do
-                run_int_test "Unit Tests: $mod" "\$C3C compile-test unit $UNIT_ARGS --test-filter $mod" "$WORKDIR/test" "true"
-            done
-        else
-            run_int_test "Unit Tests: Base" "\$C3C compile-test unit $UNIT_ARGS" "$WORKDIR/test" "false"
-        fi
+        UNIT_ARGS="-O1 -D SLOW_TESTS"
+        run_int_test "Unit Tests: Base" "\$C3C compile-test unit $UNIT_ARGS" "$WORKDIR/test" "false"
     fi
     if [ -f "$WORKDIR/test/src/test_suite_runner.c3" ]; then
         run_int_test "Test Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$WORKDIR/test"
@@ -289,26 +274,36 @@ else
 
     log_info "Running C3 $MODE checks ($TOTAL files) using $JOBS parallel jobs"
 
-    # Pre-create the build directory to avoid race conditions when parallel instances try to create it simultaneously.
-    mkdir -p "build"
+    # Pre-create a global temp dir for jobs
+    JOBS_TEMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3_tests_jobs')
+    export JOBS_TEMP_DIR
 
     compile_one() {
         local file="$1"; local log_dir="$2"; local ext="${file##*.}"; local start=$(date +%s%N); local status=0; local output=""; local injected=0
         local abs_file=$(realpath "$file" 2>/dev/null || echo "$file")
         local abs_dummy=$(realpath "$DUMMY_MAIN_FILE" 2>/dev/null || echo "$DUMMY_MAIN_FILE")
         
-        # Use filename as binary name for cleaner output, but keep it unique enough in case of name collisions.
-        local base_name=$(basename "$file")
-        local out_bin="out_${base_name%.*}"
+        # Create a unique job directory for absolute isolation
+        local job_id=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
+        local job_dir="$JOBS_TEMP_DIR/$job_id"
+        mkdir -p "$job_dir"
         
+        # Binary naming per user request: $filename (or $filename.exe on Windows)
+        local base_name=$(basename "$file")
+        local bin_name="${base_name%.*}"
+        [[ "$PLATFORM" == "Windows" ]] && bin_name="${bin_name}.exe"
+        
+        # Run compilation inside the unique job directory to avoid collisions
         if ! grep -Eq 'fn[[:space:]]+.*[[:space:]]main[[:space:]]*\(' "$file" && ! grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
-            output=$("$C3C" compile -o "$out_bin" "$abs_file" "$abs_dummy" 2>&1) || status=$?
+            output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" "$abs_dummy" 2>&1) || status=$?
             injected=1
         else
-            output=$("$C3C" compile -o "$out_bin" "$abs_file" 2>&1) || status=$?
+            output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" 2>&1) || status=$?
         fi
         
-        rm -f "$out_bin" "${out_bin}.exe"
+        # Cleanup job dir
+        rm -rf "$job_dir"
+        
         local end=$(date +%s%N); local dur=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
         local safe=$(echo "$file" | sed 's/[^[:alnum:]]/_/g'); echo -e "$output" > "${log_dir}/${safe}.log"
         if [[ $status -eq 0 ]]; then
@@ -349,7 +344,8 @@ else
             echo ""
         fi
     done < "$RESULTS_BUFFER"
-    rm -f "$RESULTS_BUFFER" "$DUMMY_MAIN_FILE"
+rm -f "$RESULTS_BUFFER" "$DUMMY_MAIN_FILE"
+rm -rf "$JOBS_TEMP_DIR"
 fi
 
 rm -rf "$LOG_DIR"
