@@ -49,7 +49,7 @@ jobs:
           arch: x64
 
       - name: Cache C3 Compiler Repo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: c3c
           key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
@@ -60,7 +60,7 @@ jobs:
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
       - name: Cache LLVM
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: c3c/build/_deps
           key: ${{ runner.os }}-llvm-${{ hashFiles('c3c/CMakeLists.txt') }}
@@ -85,7 +85,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        target: [compiler, vendor]
+        target: [compiler, vendor, integration]
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -108,7 +108,7 @@ jobs:
           arch: x64
 
       - name: Cache C3 Compiler Repo
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: c3c
           key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
@@ -125,7 +125,7 @@ jobs:
           path: c3c/build
 
       - name: Cache Vendor Repo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         if: matrix.target == 'vendor'
         with:
           path: vendor
@@ -140,7 +140,12 @@ jobs:
       - name: Run Tests
         id: tests
         continue-on-error: true
-        run: ./scripts/run_tests.sh ${{ matrix.target }}
+        run: |
+          if [[ "${{ matrix.target }}" == "integration" ]]; then
+            ./scripts/integration.sh
+          else
+            ./scripts/run_tests.sh ${{ matrix.target }}
+          fi
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v6

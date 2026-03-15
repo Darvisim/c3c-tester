@@ -96,11 +96,12 @@ compile_file() {
     local safe_fname=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
     local log_file="${log_dir}/${safe_fname}.log"
 
-    # Improved main() detection
-    if ! grep -Eq 'fn[[:space:]]+([[:alnum:]_<>\[\]*]+[[:space:]]+)?main[[:space:]]*\(' "$file"; then
+    # Robust main() detection: look for 'fn' followed by 'main' with a parameter list
+    if ! grep -Eq 'fn[[:space:]]+.*[[:space:]]main[[:space:]]*\(' "$file" && ! grep -Eq 'fn[[:space:]]+main[[:space:]]*\(' "$file"; then
         local tmp_dir="${TMPDIR:-/tmp}/c3c_tests"
         mkdir -p "$tmp_dir"
-        local tmp="${tmp_dir}/$(basename "$file").${ext}"
+        local base=$(basename "$file")
+        local tmp="${tmp_dir}/${base%.*}.tmp.${ext}"
         cp "$file" "$tmp"
         printf "\n// injected by CI\nfn void main() => 0;\n" >> "$tmp"
         output=$("$C3C" compile "$tmp" 2>&1) || status=$?
@@ -128,7 +129,8 @@ export -f compile_file log_info log_success log_warn log_error
 export C3C BLUE GREEN YELLOW RED NC
 
 COUNT=0
-printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} "$LOG_DIR" | while read -r line; do
+# Use process substitution so while loop runs in main shell
+while read -r line; do
     if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]]; then
         res="${BASH_REMATCH[1]}"
         file="${BASH_REMATCH[2]}"
@@ -149,10 +151,10 @@ printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' 
         echo "::endgroup::"
         
         if [[ "$res" == "PASS" ]]; then
-            PASSED=$((PASSED+1))
+            ((PASSED++))
             log_success "$file: Passed"
         else
-            FAILED=$((FAILED+1))
+            ((FAILED++))
             FAILED_LIST+=("$file")
             log_error "$file: Failed"
         fi
@@ -162,13 +164,13 @@ printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' 
     else
         echo "$line"
     fi
-done
+done < <(printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_file "$@"' _ {} "$LOG_DIR")
 
 rm -rf "$LOG_DIR"
 
 echo -e "\n\nChecks complete. Total $TOTAL files. $PASSED passed. $FAILED failed."
 
 echo "$PLATFORM|$MODE|$TOTAL|$PASSED|$FAILED" > "$RESULT_FILE"
-for fail in "${FAILED_LIST[@]}"; do
+for fail in "${FAILED_LIST[@]+"${FAILED_LIST[@]}"}"; do
     echo "$fail" >> "$RESULT_FILE"
 done

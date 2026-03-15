@@ -9,7 +9,11 @@ case "$PLATFORM" in
         sudo apt-get install -y cmake ninja-build build-essential curl
         ;;
     macOS)
-        brew install cmake ninja
+        for pkg in cmake ninja; do
+            if ! brew list "$pkg" &>/dev/null; then
+                brew install "$pkg"
+            fi
+        done
         ;;
     Windows)
         choco install cmake ninja -y
