@@ -22,6 +22,7 @@ COUNT=0
 TOTAL=0
 FILES=()
 FAILED_LIST=()
+EXAMPLES=()
 
 # STRICT=false: Exit with 0 even if tests fail (avoids "Process completed with exit code 1" in GHA)
 STRICT_MODE="${STRICT_MODE:-false}"
@@ -133,8 +134,12 @@ if [[ "$MODE" == "integration" ]]; then
     if [ -d "$WORKDIR/resources/examples" ]; then
         log_info "Running Standard Examples..."
         # Dynamically discover all top-level examples
-        mapfile -t EXAMPLES < <(find "$WORKDIR/resources/examples" -maxdepth 2 -name "*.c3" -not -path "*/staticlib-test/*" -not -path "*/dynlib-test/*" -not -path "*/raylib/*" | sort)
-        for ex_path in "${EXAMPLES[@]}"; do
+        # Use while read instead of mapfile for Bash 3.2 (macOS) compatibility
+        while IFS= read -r ex; do
+            EXAMPLES+=("$ex")
+        done < <(find "$WORKDIR/resources/examples" -maxdepth 2 -name "*.c3" -not -path "*/staticlib-test/*" -not -path "*/dynlib-test/*" -not -path "*/raylib/*" | sort)
+
+        for ex_path in "${EXAMPLES[@]+"${EXAMPLES[@]}"}"; do
             rel_ex=$(realpath --relative-to="$WORKDIR/resources" "$ex_path")
             # Default to compile, but run some specific ones if named appropriately or just compile all
             if [[ "$rel_ex" == *"hello_world"* || "$rel_ex" == *"process"* ]]; then
@@ -238,8 +243,10 @@ else
     done
 
     # Sort files alphabetically
-    IFS=$'\n' FILES=($(printf "%s\n" "${FILES[@]}" | sort))
-    unset IFS
+    if [[ ${#FILES[@]} -gt 0 ]]; then
+        IFS=$'\n' FILES=($(printf "%s\n" "${FILES[@]}" | sort))
+        unset IFS
+    fi
 
     TOTAL=${#FILES[@]}
     if [[ "$TOTAL" -eq 0 ]]; then
@@ -314,7 +321,7 @@ else
 
     RESULTS_BUFFER="results_buffer_${PLATFORM}_${MODE}.txt"
     COUNT=0
-    printf "%s\n" "${FILES[@]}" | xargs -I{} -P "$JOBS" bash -c 'compile_one "$@"' _ {} "$LOG_DIR" > "$RESULTS_BUFFER"
+    printf "%s\n" "${FILES[@]+"${FILES[@]}"}" | xargs -I{} -P "$JOBS" bash -c 'compile_one "$@"' _ {} "$LOG_DIR" > "$RESULTS_BUFFER"
 
     while read -r line; do
         if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]]; then
