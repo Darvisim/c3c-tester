@@ -15,6 +15,10 @@ RESULT_FILE="$RESULT_DIR/test_results.txt"
 LOG_DIR="test_logs_${PLATFORM}_${MODE}"
 mkdir -p "$LOG_DIR"
 
+DUMMY_MAIN_FILE="$(realpath "$RESULT_DIR" 2>/dev/null || echo "$RESULT_DIR")/_dummy_main.c3"
+echo "fn void main() => 0;" > "$DUMMY_MAIN_FILE"
+export DUMMY_MAIN_FILE
+
 # Global Counters
 PASSED=0
 FAILED=0
@@ -110,7 +114,22 @@ if [[ "$MODE" == "integration" ]]; then
         echo "::group::$name"
         local escaped_c3c=$(printf '%q' "$C3C")
         local resolved_cmd="${cmd//\$C3C/$escaped_c3c}"
-        (cd "$dir" && eval "$resolved_cmd") || status=$?
+        
+        # Capture output for potential retry
+        local output
+        output=$(cd "$dir" && eval "$resolved_cmd" 2>&1) || status=$?
+        
+        # Retry with main() injection if needed
+        if [[ $status -ne 0 ]] && [[ "$output" == *"The 'main' function for the executable could not found"* ]]; then
+            log_info "Retrying $name with main() injection..."
+            local abs_dummy=$(realpath "$DUMMY_MAIN_FILE" 2>/dev/null || echo "$DUMMY_MAIN_FILE")
+            # Append dummy main to the command
+            local retry_cmd="$resolved_cmd $abs_dummy"
+            status=0
+            output=$(cd "$dir" && eval "$retry_cmd" 2>&1) || status=$?
+        fi
+        
+        printf "%s\n" "$output"
         echo "::endgroup::"
         local end=$(date +%s%N)
         local duration=$(awk "BEGIN {printf \"%.3f\", ($end-$start)/1000000000}")
@@ -352,9 +371,6 @@ else
     export -f compile_one log_info log_success log_warn log_error
     export C3C BLUE GREEN YELLOW RED NC
 
-    DUMMY_MAIN_FILE="$(realpath "$RESULT_DIR")/_dummy_main.c3"
-    echo "fn void main() => 0;" > "$DUMMY_MAIN_FILE"
-    export DUMMY_MAIN_FILE
 
     RESULTS_BUFFER="results_buffer_${PLATFORM}_${MODE}.txt"
     COUNT=0
@@ -385,9 +401,11 @@ else
             echo ""
         fi
     done < "$RESULTS_BUFFER"
-rm -f "$RESULTS_BUFFER" "$DUMMY_MAIN_FILE"
-rm -rf "$JOBS_TEMP_DIR"
+    rm -f "$RESULTS_BUFFER"
+    rm -rf "$JOBS_TEMP_DIR"
 fi
+
+rm -f "$DUMMY_MAIN_FILE"
 
 rm -rf "$LOG_DIR"
 echo -e "\nChecks complete. Total $TOTAL, $PASSED passed, $FAILED failed."
