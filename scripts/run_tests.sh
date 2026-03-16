@@ -135,7 +135,7 @@ if [[ "$MODE" == "integration" ]]; then
         # Dynamically discover all top-level examples
         mapfile -t EXAMPLES < <(find "$WORKDIR/resources/examples" -maxdepth 2 -name "*.c3" -not -path "*/staticlib-test/*" -not -path "*/dynlib-test/*" -not -path "*/raylib/*" | sort)
         for ex_path in "${EXAMPLES[@]}"; do
-            local rel_ex=$(realpath --relative-to="$WORKDIR/resources" "$ex_path")
+            rel_ex=$(realpath --relative-to="$WORKDIR/resources" "$ex_path")
             # Default to compile, but run some specific ones if named appropriately or just compile all
             if [[ "$rel_ex" == *"hello_world"* || "$rel_ex" == *"process"* ]]; then
                 run_int_test "Example: $rel_ex" "\$C3C compile-run $rel_ex" "$WORKDIR/resources"
