@@ -121,10 +121,21 @@ if [[ "$MODE" == "integration" ]]; then
         
         # Retry with main() injection if needed
         if [[ $status -ne 0 ]] && [[ "$output" == *"The 'main' function for the executable could not found"* ]]; then
-            log_info "Retrying $name with main() injection..."
+            log_info "main() was injected via auxiliary file."
             local abs_dummy=$(realpath "$DUMMY_MAIN_FILE" 2>/dev/null || echo "$DUMMY_MAIN_FILE")
-            # Append dummy main to the command
-            local retry_cmd="$resolved_cmd $abs_dummy"
+            
+            # Derive a stable binary name from the test name
+            local bname=$(basename "$name")
+            local out_name="${bname%.*}"
+            [[ "$PLATFORM" == "Windows" ]] && out_name="${out_name}.exe"
+
+            # Append dummy main and force output name if missing
+            local retry_cmd="$resolved_cmd"
+            if [[ "$resolved_cmd" == *" compile"* && "$resolved_cmd" != *" -o "* ]]; then
+                retry_cmd="$resolved_cmd -o $out_name"
+            fi
+            retry_cmd="$retry_cmd $abs_dummy"
+            
             status=0
             output=$(cd "$dir" && eval "$retry_cmd" 2>&1) || status=$?
         fi
