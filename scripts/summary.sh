@@ -8,7 +8,7 @@ if [[ -z "${GITHUB_STEP_SUMMARY:-}" ]]; then
     GITHUB_STEP_SUMMARY="/dev/null"
 fi
 
-echo "## Final Test Results ($PLATFORM)" >> "$GITHUB_STEP_SUMMARY"
+echo "## Final Test Results" >> "$GITHUB_STEP_SUMMARY"
 echo "" >> "$GITHUB_STEP_SUMMARY"
 echo "| OS | Target | Total | Passed | Failed |" >> "$GITHUB_STEP_SUMMARY"
 echo "|----|--------|-------|--------|--------|" >> "$GITHUB_STEP_SUMMARY"

@@ -128,7 +128,8 @@ if [[ "$MODE" == "integration" ]]; then
     }
 
     # 1. CLI Basic Tests
-    run_int_test "CLI: init" "\$C3C init-lib mylib && \$C3C init myproject" "$WORKDIR"
+    log_info "Running CLI Basic Tests..."
+    run_int_test "init" "\$C3C init-lib mylib && \$C3C init myproject" "$WORKDIR"
     
     # 2. Standard Examples
     if [ -d "$WORKDIR/resources/examples" ]; then
@@ -140,52 +141,56 @@ if [[ "$MODE" == "integration" ]]; then
         done < <(find "$WORKDIR/resources/examples" -maxdepth 2 -name "*.c3" -not -path "*/staticlib-test/*" -not -path "*/dynlib-test/*" -not -path "*/raylib/*" | sort)
 
         for ex_path in "${EXAMPLES[@]+"${EXAMPLES[@]}"}"; do
-            rel_ex=$(realpath --relative-to="$WORKDIR/resources" "$ex_path")
+            # Portable relative path calculation for macOS/Linux
+            rel_ex="${ex_path#$WORKDIR/resources/}"
             # Default to compile, but run some specific ones if named appropriately or just compile all
             if [[ "$rel_ex" == *"hello_world"* || "$rel_ex" == *"process"* ]]; then
-                run_int_test "Example: $rel_ex" "\$C3C compile-run $rel_ex" "$WORKDIR/resources"
+                run_int_test "$rel_ex" "\$C3C compile-run $rel_ex" "$WORKDIR/resources"
             else
-                run_int_test "Example: $rel_ex" "\$C3C compile $rel_ex" "$WORKDIR/resources"
+                run_int_test "$rel_ex" "\$C3C compile $rel_ex" "$WORKDIR/resources"
             fi
         done
 
         if [[ "$PLATFORM" == "Linux" ]]; then
-            run_int_test "Example: linux_stack (builtin)" "\$C3C compile-run --linker=builtin linux_stack.c3" "$WORKDIR/resources"
-            run_int_test "Example: linux_stack" "\$C3C compile-run linux_stack.c3" "$WORKDIR/resources"
+            run_int_test "linux_stack (builtin)" "\$C3C compile-run --linker=builtin linux_stack.c3" "$WORKDIR/resources"
+            run_int_test "linux_stack" "\$C3C compile-run linux_stack.c3" "$WORKDIR/resources"
         fi
         
-        run_int_test "Example: Cross-compile constants" "\$C3C compile --no-entry --test -g --threads 1 --target macos-x64 examples/constants.c3" "$WORKDIR/resources"
+        run_int_test "Cross-compile constants" "\$C3C compile --no-entry --test -g --threads 1 --target macos-x64 examples/constants.c3" "$WORKDIR/resources"
     fi
 
     # 3. WASM Compilation
     if [ -d "$WORKDIR/resources/testfragments" ]; then
-        run_int_test "WASM: Compile Check" "\$C3C compile --target wasm32 -g0 --no-entry -Os wasm4.c3" "$WORKDIR/resources/testfragments"
+        log_info "Running WASM Compilation..."
+        run_int_test "Compile Check" "\$C3C compile --target wasm32 -g0 --no-entry -Os wasm4.c3" "$WORKDIR/resources/testfragments"
     fi
     
     # 4. Static Library Tests
     if [ -d "$WORKDIR/resources/examples/staticlib-test" ]; then
+        log_info "Running Static Library Tests..."  
         if [[ "$PLATFORM" == "Windows" ]]; then
-            run_int_test "Static Lib: Build & Run" "\$C3C -vv static-lib add.c3 && \$C3C -vv compile-run test.c3 -l ./add.lib" "$WORKDIR/resources/examples/staticlib-test"
+            run_int_test "Build & Run" "\$C3C -vv static-lib add.c3 && \$C3C -vv compile-run test.c3 -l ./add.lib" "$WORKDIR/resources/examples/staticlib-test"
         else
-            run_int_test "Static Lib: Build" "\$C3C -vv static-lib add.c3 -o libadd" "$WORKDIR/resources/examples/staticlib-test"
+            run_int_test "Build" "\$C3C -vv static-lib add.c3 -o libadd" "$WORKDIR/resources/examples/staticlib-test"
             if [[ "$PLATFORM" == "Linux" ]]; then
-                run_int_test "Static Lib: CC Link" "cc test.c -L. -ladd -ldl -lm -lpthread -o a.out && ./a.out" "$WORKDIR/resources/examples/staticlib-test"
+                run_int_test "CC Link" "cc test.c -L. -ladd -ldl -lm -lpthread -o a.out && ./a.out" "$WORKDIR/resources/examples/staticlib-test"
             else
-                run_int_test "Static Lib: CC Link" "cc test.c -L. -ladd -o a.out && ./a.out" "$WORKDIR/resources/examples/staticlib-test"
+                run_int_test "CC Link" "cc test.c -L. -ladd -o a.out && ./a.out" "$WORKDIR/resources/examples/staticlib-test"
             fi
-            run_int_test "Static Lib: C3 Run" "\$C3C -vv compile-run test.c3 -L . -l add" "$WORKDIR/resources/examples/staticlib-test"
+            run_int_test "C3 Run" "\$C3C -vv compile-run test.c3 -L . -l add" "$WORKDIR/resources/examples/staticlib-test"
         fi
     fi
 
     # 5. Dynamic Library Tests
     if [ -d "$WORKDIR/resources/examples/dynlib-test" ]; then
+        log_info "Running Dynamic Library Tests..."  
         if [[ "$PLATFORM" == "Windows" ]]; then
-            run_int_test "DynLib: Build & Run" "\$C3C -vv dynamic-lib add.c3 && \$C3C -vv compile-run test.c3 -l ./add.lib" "$WORKDIR/resources/examples/dynlib-test"
+            run_int_test "Build & Run" "\$C3C -vv dynamic-lib add.c3 && \$C3C -vv compile-run test.c3 -l ./add.lib" "$WORKDIR/resources/examples/dynlib-test"
         elif [[ "$PLATFORM" == "Linux" || "$PLATFORM" == "macOS" ]]; then
-            run_int_test "DynLib: Build" "\$C3C -vv dynamic-lib add.c3 -o libadd" "$WORKDIR/resources/examples/dynlib-test"
+            run_int_test "Build" "\$C3C -vv dynamic-lib add.c3 -o libadd" "$WORKDIR/resources/examples/dynlib-test"
             if [[ "$PLATFORM" == "Linux" ]]; then
-                run_int_test "DynLib: CC Link" "cc test.c -L. -ladd -Wl,-rpath=. -o a.out && ./a.out" "$WORKDIR/resources/examples/dynlib-test"
-                run_int_test "DynLib: C3 Run" "\$C3C compile-run test.c3 -L . -l add -z -Wl,-rpath=." "$WORKDIR/resources/examples/dynlib-test"
+                run_int_test "CC Link" "cc test.c -L. -ladd -Wl,-rpath=. -o a.out && ./a.out" "$WORKDIR/resources/examples/dynlib-test"
+                run_int_test "C3 Run" "\$C3C compile-run test.c3 -L . -l add -z -Wl,-rpath=." "$WORKDIR/resources/examples/dynlib-test"
             elif [[ "$PLATFORM" == "macOS" ]]; then
                 run_int_test "DynLib: C3 Run" "\$C3C -vv compile-run test.c3 -l ./libadd.dylib" "$WORKDIR/resources/examples/dynlib-test"
             fi
@@ -194,27 +199,31 @@ if [[ "$MODE" == "integration" ]]; then
 
     # 6. Project Tests
     if [ -d "$WORKDIR/resources/testproject" ]; then
-        run_int_test "Project: run" "\$C3C run -vv --trust=full" "$WORKDIR/resources/testproject"
+        log_info "Running Project Tests..."  
+        run_int_test "run" "\$C3C run -vv --trust=full" "$WORKDIR/resources/testproject"
         if [[ "$PLATFORM" == "Windows" ]]; then
-            run_int_test "Project: Win32 run" "\$C3C -vv --emit-llvm run hello_world_win32 --trust=full" "$WORKDIR/resources/testproject"
-            run_int_test "Project: Win32 lib build" "\$C3C -vv build hello_world_win32_lib --trust=full" "$WORKDIR/resources/testproject"
+            run_int_test "Win32 run" "\$C3C -vv --emit-llvm run hello_world_win32 --trust=full" "$WORKDIR/resources/testproject"
+            run_int_test "Win32 lib build" "\$C3C -vv build hello_world_win32_lib --trust=full" "$WORKDIR/resources/testproject"
         fi
     fi
     
     # 7. Unit Tests
     if [ -d "$WORKDIR/test/unit" ]; then
+        log_info "Running Unit Tests..."  
         UNIT_ARGS="-O1 -D SLOW_TESTS"
-        run_int_test "Unit Tests: Base" "\$C3C compile-test unit $UNIT_ARGS" "$WORKDIR/test"
+        run_int_test "Base" "\$C3C compile-test unit $UNIT_ARGS" "$WORKDIR/test"
     fi
     if [ -f "$WORKDIR/test/src/test_suite_runner.c3" ]; then
+        log_info "Running Test Suite..."  
         run_int_test "Test Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$WORKDIR/test"
     fi
 
     # 8. Vendor Fetch & Raylib Example
-    run_int_test "CLI: vendor-fetch" "\$C3C vendor-fetch raylib" "$WORKDIR"
+    log_info "Running Vendor Fetch & Raylib Example..."  
+    run_int_test "vendor-fetch" "\$C3C vendor-fetch raylib" "$WORKDIR"
     if [[ -d "$WORKDIR/resources/examples/raylib" && "$PLATFORM" != "Windows" ]]; then
          # Raylib on unix usually works in these CI envs if deps are there
-         run_int_test "CLI: raylib-arkanoid" "\$C3C compile --lib raylib --print-linking examples/raylib/raylib_arkanoid.c3" "$WORKDIR/resources"
+         run_int_test "raylib-arkanoid" "\$C3C compile --lib raylib --print-linking examples/raylib/raylib_arkanoid.c3" "$WORKDIR/resources"
     fi
 
     rm -rf "$WORKDIR"
@@ -276,27 +285,55 @@ else
         local bin_name="${base_name%.*}"
         [[ "$PLATFORM" == "Windows" ]] && bin_name="${bin_name}.exe"
         
-        # Retry logic for Windows "Unable to create temporary directory" error
+        # Advanced Retry Logic:
+        # 1. Handle Windows temporary directory collisions
+        # 2. Dynamically handle main() injection based on compiler feedback
         local max_retries=3
         local retry_count=0
+        local try_injection=0
+        
+        # Initial guess based on grep
+        if ! grep -Eq 'fn\s+(void|int|u?[0-9]+)?\s*main\s*\(' "$file"; then
+            try_injection=1
+        fi
+        
         while [[ $retry_count -lt $max_retries ]]; do
             status=0
-            # Refined main() detection regex to avoid false positives/negatives
-            if ! grep -Eq 'fn\s+(void|int|u?[0-9]+)?\s*main\s*\(' "$file"; then
+            injected=$try_injection
+            if [[ $injected -eq 1 ]]; then
                 output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" "$abs_dummy" 2>&1) || status=$?
-                injected=1
             else
                 output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" 2>&1) || status=$?
-                injected=0
             fi
             
-            if [[ $status -eq 0 ]] || [[ ! "$output" == *"Unable to create temporary directory"* ]]; then
+            # Check for success
+            if [[ $status -eq 0 ]]; then
                 break
             fi
             
-            # If we hit the collision error, wait a tiny bit and retry
-            retry_count=$((retry_count + 1))
-            sleep 0.5
+            # Check for "main function not found" -> retry WITH injection if we didn't use it
+            if [[ "$output" == *"The 'main' function for the executable could not found"* ]] && [[ $injected -eq 0 ]]; then
+                try_injection=1
+                # Don't increment retry_count for a logic switch retry
+                continue
+            fi
+            
+            # Check for redefinition of main -> retry WITHOUT injection if we used it
+            if [[ "$output" == *"redefinition of 'main'"* ]] && [[ $injected -eq 1 ]]; then
+                try_injection=0
+                # Don't increment retry_count for a logic switch retry
+                continue
+            fi
+            
+            # Check for Windows temporary directory collision
+            if [[ "$output" == *"Unable to create temporary directory"* ]]; then
+                retry_count=$((retry_count + 1))
+                sleep 0.5
+                continue
+            fi
+            
+            # If it's some other error, don't retry injection logic, just count it as a failure
+            break
         done
         
         # Cleanup job dir
