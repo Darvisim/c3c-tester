@@ -18,6 +18,18 @@ env:
 
 jobs:
 
+  # Anchor definitions MUST be inside jobs
+  _anchors:
+    runs-on: ubuntu-latest
+    steps:
+      - &checkout
+        name: Checkout
+        uses: actions/checkout@v5
+
+      - &chmod
+        name: Make scripts executable
+        run: chmod +x scripts/*.sh || true
+
   build-compiler:
     name: Build (${{ matrix.os }})
     strategy:
@@ -33,11 +45,8 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Make scripts executable
-        run: chmod +x scripts/*.sh || true
+      - *checkout
+      - *chmod
 
       - name: Setup Dependencies
         run: ./scripts/setup.sh
@@ -53,8 +62,7 @@ jobs:
         with:
           path: c3c
           key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-c3c-repo-
+          restore-keys: ${{ runner.os }}-
 
       - name: Sync C3 Compiler
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
@@ -64,8 +72,7 @@ jobs:
         with:
           path: c3c/build/_deps
           key: ${{ runner.os }}-llvm-${{ hashFiles('c3c/CMakeLists.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-llvm-
+          restore-keys: ${{ runner.os }}-
 
       - name: Build Compiler
         run: ./scripts/compiler.sh
@@ -95,11 +102,8 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Make scripts executable
-        run: chmod +x scripts/*.sh || true
+      - *checkout
+      - *chmod
 
       - name: Setup MSVC
         if: matrix.os == 'windows-latest'
@@ -112,8 +116,7 @@ jobs:
         with:
           path: c3c
           key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-c3c-repo-
+          restore-keys: ${{ runner.os }}-
 
       - name: Sync C3 Compiler repo
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
@@ -130,8 +133,7 @@ jobs:
         with:
           path: vendor
           key: ${{ runner.os }}-vendor-repo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-vendor-repo-
+          restore-keys: ${{ runner.os }}-
 
       - name: Sync Vendor
         if: matrix.target == 'vendor'
@@ -156,12 +158,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+    defaults:
+      run:
+        shell: bash
 
-      - name: Make scripts executable
-        run: chmod +x scripts/*.sh || true
+    steps:
+      - *checkout
+      - *chmod
 
       - name: Download all test results
         uses: actions/download-artifact@v7
