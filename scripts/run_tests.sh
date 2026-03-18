@@ -124,16 +124,8 @@ if [[ "$MODE" == "integration" ]]; then
             log_info "main() was injected via auxiliary file."
             local abs_dummy=$(realpath "$DUMMY_MAIN_FILE" 2>/dev/null || echo "$DUMMY_MAIN_FILE")
             
-            # Derive a stable binary name from the test name
-            local bname=$(basename "$name")
-            local out_name="${bname%.*}"
-            [[ "$PLATFORM" == "Windows" ]] && out_name="${out_name}.exe"
-
-            # Append dummy main and force output name if missing
+            # Append dummy main
             local retry_cmd="$resolved_cmd"
-            if [[ "$resolved_cmd" == *" compile"* && "$resolved_cmd" != *" -o "* ]]; then
-                retry_cmd="$resolved_cmd -o $out_name"
-            fi
             retry_cmd="$retry_cmd $abs_dummy"
             
             status=0
@@ -310,11 +302,6 @@ else
         local job_dir="$JOBS_TEMP_DIR/$job_id"
         mkdir -p "$job_dir"
         
-        # Binary naming per user request: $filename (or $filename.exe on Windows)
-        local base_name=$(basename "$file")
-        local bin_name="${base_name%.*}"
-        [[ "$PLATFORM" == "Windows" ]] && bin_name="${bin_name}.exe"
-        
         # Advanced Retry Logic:
         # 1. Handle Windows temporary directory collisions
         # 2. Dynamically handle main() injection based on compiler feedback
@@ -331,9 +318,9 @@ else
             status=0
             injected=$try_injection
             if [[ $injected -eq 1 ]]; then
-                output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" "$abs_dummy" 2>&1) || status=$?
+                output=$(cd "$job_dir" && "$C3C" compile "$abs_file" "$abs_dummy" 2>&1) || status=$?
             else
-                output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" 2>&1) || status=$?
+                output=$(cd "$job_dir" && "$C3C" compile "$abs_file" 2>&1) || status=$?
             fi
             
             # Check for success
