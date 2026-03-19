@@ -11,13 +11,11 @@ if [ -d "$DIR/.git" ]; then
     log_info "Updating existing repo in $DIR"
     git -C "$DIR" fetch origin
     git -C "$DIR" reset --hard origin/HEAD
-
-elif [ -d "$DIR" ]; then
-    log_warn "Directory $DIR exists but is not a git repo. Recreating..."
-    rm -rf "$DIR"
-    git clone --depth 1 "$REPO_URL" "$DIR"
-
 else
+    if [ -d "$DIR" ]; then
+        log_warn "Directory $DIR exists but is not a git repo. Recreating..."
+        rm -rf "$DIR"
+    fi
     log_info "Cloning $REPO_URL into $DIR"
     git clone --depth 1 "$REPO_URL" "$DIR"
 fi

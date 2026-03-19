@@ -15,7 +15,7 @@ log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
 
-# Detect OS
+# Detect OS/Platform
 OS="${RUNNER_OS:-$(uname -s)}"
 case "$OS" in
     Linux*)     PLATFORM="Linux" ;;
@@ -24,14 +24,21 @@ case "$OS" in
     *)          PLATFORM="Unknown" ;;
 esac
 
+# Check if commands exist
+check_deps() {
+    for cmd in "$@"; do
+        if ! command -v "$cmd" &>/dev/null; then return 1; fi
+    done
+    return 0
+}
+
 # Compiler path normalization with robust absolute discovery
 get_c3c_path() {
-    local base_path="./c3c/build/c3c"
-    local bin_name="c3c"
-    [[ "$PLATFORM" == "Windows" ]] && bin_name="c3c.exe"
+    local bin_name="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
+    local base_path="./c3c/build/$bin_name"
 
     local search_paths=(
-        "$base_path$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
+        "$base_path"
         "./c3c/build/Release/$bin_name"
         "./c3c/build/Debug/$bin_name"
         "./c3c/build/bin/$bin_name"
@@ -52,8 +59,8 @@ get_c3c_path() {
         return
     fi
     
-    # 3. Fallback to default
-    realpath "$base_path$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")" 2>/dev/null || echo "$base_path"
+    # 3. Fallback
+    realpath "$base_path" 2>/dev/null || echo "$base_path"
 }
 
 # Ensure execution permissions on Unix

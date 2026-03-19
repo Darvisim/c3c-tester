@@ -68,42 +68,30 @@ if [[ "$MODE" == "integration" ]]; then
     [ -d "c3c/test" ] && cp -r c3c/test "$WORKDIR/"
 
     # Pre-calculate TOTAL for integration tests
-    TOTAL=2 # init and vendor-fetch are always run
+    TOTAL=2 # init and vendor-fetch
     if [ -d "$WORKDIR/resources/examples" ]; then
-        # Dynamically count all examples excluding some libs
         EX_COUNT=$(find "$WORKDIR/resources/examples" -maxdepth 2 -name "*.c3" -not -path "*/staticlib-test/*" -not -path "*/dynlib-test/*" -not -path "*/raylib/*" | wc -l)
-        TOTAL=$((TOTAL + EX_COUNT))
-        [[ "$PLATFORM" == "Linux" ]] && TOTAL=$((TOTAL + 2)) # linux_stack
-        TOTAL=$((TOTAL + 1)) # cross constants
+        TOTAL=$((TOTAL + EX_COUNT + 1)) # +1 for cross constants
+        [[ "$PLATFORM" == "Linux" ]] && TOTAL=$((TOTAL + 2))
     fi
     [ -d "$WORKDIR/resources/testfragments" ] && TOTAL=$((TOTAL + 1))
+    
     if [ -d "$WORKDIR/resources/examples/staticlib-test" ]; then
-        if [[ "$PLATFORM" == "Windows" ]]; then
-            TOTAL=$((TOTAL + 1))
-        else
-            TOTAL=$((TOTAL + 3)) # Build, CC Link, C3 Run
-        fi
+        [[ "$PLATFORM" == "Windows" ]] && TOTAL=$((TOTAL + 1)) || TOTAL=$((TOTAL + 3))
     fi
     if [ -d "$WORKDIR/resources/examples/dynlib-test" ]; then
-        if [[ "$PLATFORM" == "Windows" ]]; then
-            TOTAL=$((TOTAL + 1))
-        elif [[ "$PLATFORM" == "Linux" ]]; then
-            TOTAL=$((TOTAL + 3)) # Build, CC Link, C3 Run
-        elif [[ "$PLATFORM" == "macOS" ]]; then
-            TOTAL=$((TOTAL + 2)) # Build, C3 Run
-        fi
+        case "$PLATFORM" in
+            Windows) TOTAL=$((TOTAL + 1)) ;;
+            Linux)   TOTAL=$((TOTAL + 3)) ;;
+            macOS)   TOTAL=$((TOTAL + 2)) ;;
+        esac
     fi
     if [ -d "$WORKDIR/resources/testproject" ]; then
-        TOTAL=$((TOTAL + 1))
-        [[ "$PLATFORM" == "Windows" ]] && TOTAL=$((TOTAL + 2))
+        [[ "$PLATFORM" == "Windows" ]] && TOTAL=$((TOTAL + 3)) || TOTAL=$((TOTAL + 1))
     fi
-    if [ -d "$WORKDIR/test/unit" ]; then
-        TOTAL=$((TOTAL + 1))
-    fi
+    [ -d "$WORKDIR/test/unit" ] && TOTAL=$((TOTAL + 1))
     [ -f "$WORKDIR/test/src/test_suite_runner.c3" ] && TOTAL=$((TOTAL + 1))
-    if [[ -d "$WORKDIR/resources/examples/raylib" && "$PLATFORM" != "Windows" ]]; then
-        TOTAL=$((TOTAL + 1))
-    fi
+    [[ -d "$WORKDIR/resources/examples/raylib" && "$PLATFORM" != "Windows" ]] && TOTAL=$((TOTAL + 1))
 
     run_int_test() {
         local name="$1"
@@ -401,35 +389,33 @@ else
     EXTRA_ARGS=""
     if [[ "$MODE" == "vendor" ]]; then
         ABS_VENDOR_LIB=$(realpath vendor/libraries 2>/dev/null || echo "$PWD/vendor/libraries")
-        EXTRA_ARGS="--lib $ABS_VENDOR_LIB"
+        EXTRA_ARGS="--libdir $ABS_VENDOR_LIB"
     fi
 
     printf "%s\n" "${FILES[@]+"${FILES[@]}"}" | xargs -I{} -P "$JOBS" bash -c 'compile_one "$@"' _ {} "$LOG_DIR" "$EXTRA_ARGS" > "$RESULTS_BUFFER"
 
     while read -r line; do
-        if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]]; then
-            res="${BASH_REMATCH[1]}"; file="${BASH_REMATCH[2]}"; dur="${BASH_REMATCH[3]}"; inj="${BASH_REMATCH[4]}"
-            COUNT=$((COUNT + 1))
-            echo "::group::$file ($dur s)"
-            [[ "$inj" == "1" ]] && log_info "main() was injected via auxiliary file."
-            safe=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
-            if [ -f "${LOG_DIR}/${safe}.log" ]; then
-                cat "${LOG_DIR}/${safe}.log"
-                # Ensure a newline after the log content to avoid group closing interleaving
-                echo ""
-            fi
-            echo "::endgroup::"
-            if [[ "$res" == "PASS" ]]; then
-                PASSED=$((PASSED + 1))
-                log_success "$file: Passed"
-            else
-                FAILED=$((FAILED + 1))
-                FAILED_LIST+=("$file")
-                log_error "$file: Failed"
-            fi
-            progress_bar "$COUNT" "$TOTAL"
-            echo ""
+        [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]] || continue
+        
+        res="${BASH_REMATCH[1]}"; file="${BASH_REMATCH[2]}"; dur="${BASH_REMATCH[3]}"; inj="${BASH_REMATCH[4]}"
+        COUNT=$((COUNT + 1))
+        
+        echo "::group::$file ($dur s)"
+        [[ "$inj" == "1" ]] && log_info "main() was injected via auxiliary file."
+        safe=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
+        [ -f "${LOG_DIR}/${safe}.log" ] && cat "${LOG_DIR}/${safe}.log" && echo ""
+        echo "::endgroup::"
+        
+        if [[ "$res" == "PASS" ]]; then
+            PASSED=$((PASSED + 1))
+            log_success "$file: Passed"
+        else
+            FAILED=$((FAILED + 1))
+            FAILED_LIST+=("$file")
+            log_error "$file: Failed"
         fi
+        progress_bar "$COUNT" "$TOTAL"
+        echo ""
     done < "$RESULTS_BUFFER"
     rm -f "$RESULTS_BUFFER"
     rm -rf "$JOBS_TEMP_DIR"

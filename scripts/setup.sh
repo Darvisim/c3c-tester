@@ -5,22 +5,18 @@ log_info "Setting up dependencies for $PLATFORM..."
 
 case "$PLATFORM" in
     Linux)
-        if ! command -v cmake &>/dev/null || ! command -v ninja &>/dev/null || ! command -v curl &>/dev/null; then
+        if ! check_deps cmake ninja curl; then
             sudo apt-get update
             sudo apt-get install -y cmake ninja-build build-essential curl
         fi
         ;;
     macOS)
-        for pkg in cmake ninja; do
-            if ! command -v "$pkg" &>/dev/null; then
-                if ! brew list "$pkg" &>/dev/null; then
-                    brew install "$pkg"
-                fi
-            fi
-        done
+        if ! check_deps cmake ninja; then
+            brew install cmake ninja
+        fi
         ;;
     Windows)
-        if ! command -v cmake &>/dev/null || ! command -v ninja &>/dev/null; then
+        if ! check_deps cmake ninja; then
             choco install cmake ninja -y
         fi
         ;;
