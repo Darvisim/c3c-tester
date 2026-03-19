@@ -18,18 +18,6 @@ env:
 
 jobs:
 
-  # Anchor definitions MUST be inside jobs
-  _anchors:
-    runs-on: ubuntu-latest
-    steps:
-      - &checkout
-        name: Checkout
-        uses: actions/checkout@v5
-
-      - &chmod
-        name: Make scripts executable
-        run: chmod +x scripts/*.sh || true
-
   build-compiler:
     name: Build (${{ matrix.os }})
     strategy:
@@ -45,8 +33,13 @@ jobs:
         shell: bash
 
     steps:
-      - *checkout
-      - *chmod
+      - &checkout
+        name: Checkout
+        uses: actions/checkout@v5
+
+      - &chmod
+        name: Make scripts executable
+        run: chmod +x scripts/*.sh || true
 
       - name: Setup Dependencies
         run: ./scripts/setup.sh
