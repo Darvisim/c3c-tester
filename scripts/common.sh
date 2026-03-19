@@ -15,46 +15,51 @@ log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
 
-# Detect OS (simplified)
-case "${RUNNER_OS:-$(uname -s)}" in
-    Linux*) PLATFORM="Linux" ;;
-    Darwin*) PLATFORM="macOS" ;;
+# Detect OS
+OS="${RUNNER_OS:-$(uname -s)}"
+case "$OS" in
+    Linux*)     PLATFORM="Linux" ;;
+    Darwin*|macOS*)    PLATFORM="macOS" ;;
     Windows*|MINGW*|MSYS*) PLATFORM="Windows" ;;
-    *) PLATFORM="Unknown" ;;
+    *)          PLATFORM="Unknown" ;;
 esac
 
-# Unified executable extension
-EXE_EXT=$([[ "$PLATFORM" == "Windows" ]] && echo ".exe")
-
-# Helper: safe absolute path
-abspath() { realpath "$1" 2>/dev/null || echo "$1"; }
-
-# Compiler path normalization with reduced duplication
+# Compiler path normalization with robust absolute discovery
 get_c3c_path() {
-    local bin="c3c$EXE_EXT"
-    local paths=(
-        "./c3c/build/$bin"
-        "./c3c/build/Release/$bin"
-        "./c3c/build/Debug/$bin"
-        "./c3c/build/bin/$bin"
+    local base_path="./c3c/build/c3c"
+    local bin_name="c3c"
+    [[ "$PLATFORM" == "Windows" ]] && bin_name="c3c.exe"
+
+    local search_paths=(
+        "$base_path$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
+        "./c3c/build/Release/$bin_name"
+        "./c3c/build/Debug/$bin_name"
+        "./c3c/build/bin/$bin_name"
     )
-
+    
     # 1. Try known paths
-    for p in "${paths[@]}"; do
-        [[ -f "$p" ]] && abspath "$p" && return
+    for p in "${search_paths[@]}"; do
+        if [[ -f "$p" ]]; then
+            echo "$(realpath "$p")"
+            return
+        fi
     done
-
+    
     # 2. Try generic search in build dir
-    local found
-    found=$(find ./c3c/build -name "$bin" -type f -print -quit)
-    [[ -n "$found" ]] && abspath "$found" && return
-
-    # 3. Fallback
-    echo "./c3c/build/$bin"
+    local found=$(find ./c3c/build -name "$bin_name" -type f | head -n 1)
+    if [[ -n "$found" ]]; then
+        echo "$(realpath "$found")"
+        return
+    fi
+    
+    # 3. Fallback to default
+    realpath "$base_path$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")" 2>/dev/null || echo "$base_path"
 }
 
 # Ensure execution permissions on Unix
 ensure_executable() {
     local file="$1"
-    [[ "$PLATFORM" != "Windows" && -f "$file" ]] && chmod +x "$file"
+    if [[ "$PLATFORM" != "Windows" && -f "$file" ]]; then
+        chmod +x "$file"
+    fi
 }

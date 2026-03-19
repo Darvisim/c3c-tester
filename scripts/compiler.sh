@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/common.sh"
 
-BUILD_DIR="c3c/build"
+C3_DIR="./c3c"
+BUILD_DIR="$C3_DIR/build"
 
 log_info "Building C3 Compiler on $PLATFORM..."
 
 echo "::group::CMake Configuration"
-cmake -S c3c \
+cmake -S "$C3_DIR" \
       -B "$BUILD_DIR" \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
@@ -21,8 +22,8 @@ log_info "Verifying build..."
 C3C=$(get_c3c_path)
 ensure_executable "$C3C"
 
-# Run once and capture version
-if VERSION=$("$C3C" --version 2>/dev/null | head -n 1); then
+if "$C3C" --version >/dev/null 2>&1; then
+    VERSION=$("$C3C" --version | head -n 1)
     log_success "Compiler built successfully: $VERSION"
 else
     log_error "Compiler build validation failed."
