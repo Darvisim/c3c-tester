@@ -301,7 +301,7 @@ else
     export JOBS_TEMP_DIR
 
     compile_one() {
-        local file="$1"; local log_dir="$2"; local ext="${file##*.}"; local start=$(date +%s%N); local status=0; local output=""; local injected=0
+        local file="$1"; local log_dir="$2"; local extra_args="$3"; local ext="${file##*.}"; local start=$(date +%s%N); local status=0; local output=""; local injected=0
         local abs_file=$(realpath "$file" 2>/dev/null || echo "$file")
         local abs_dummy=$(realpath "$DUMMY_MAIN_FILE" 2>/dev/null || echo "$DUMMY_MAIN_FILE")
         
@@ -344,9 +344,9 @@ else
             status=0
             injected=$try_injection
             if [[ $injected -eq 1 ]]; then
-                output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" "$abs_dummy" 2>&1) || status=$?
+                output=$(cd "$job_dir" && "$C3C" compile $extra_args -o "$bin_name" "$abs_file" "$abs_dummy" 2>&1) || status=$?
             else
-                output=$(cd "$job_dir" && "$C3C" compile -o "$bin_name" "$abs_file" 2>&1) || status=$?
+                output=$(cd "$job_dir" && "$C3C" compile $extra_args -o "$bin_name" "$abs_file" 2>&1) || status=$?
             fi
             
             # Check for success
@@ -398,7 +398,13 @@ else
 
     RESULTS_BUFFER="results_buffer_${PLATFORM}_${MODE}.txt"
     COUNT=0
-    printf "%s\n" "${FILES[@]+"${FILES[@]}"}" | xargs -I{} -P "$JOBS" bash -c 'compile_one "$@"' _ {} "$LOG_DIR" > "$RESULTS_BUFFER"
+    EXTRA_ARGS=""
+    if [[ "$MODE" == "vendor" ]]; then
+        ABS_VENDOR_LIB=$(realpath vendor/libraries 2>/dev/null || echo "$PWD/vendor/libraries")
+        EXTRA_ARGS="--lib $ABS_VENDOR_LIB"
+    fi
+
+    printf "%s\n" "${FILES[@]+"${FILES[@]}"}" | xargs -I{} -P "$JOBS" bash -c 'compile_one "$@"' _ {} "$LOG_DIR" "$EXTRA_ARGS" > "$RESULTS_BUFFER"
 
     while read -r line; do
         if [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]]; then
