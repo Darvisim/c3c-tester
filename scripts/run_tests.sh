@@ -309,6 +309,19 @@ else
         local job_id=$(echo "$file" | sed 's/[^[:alnum:]]/_/g')
         local job_dir="$JOBS_TEMP_DIR/$job_id"
         mkdir -p "$job_dir"
+
+        # Copy manifest.json if found in parent directories (up to workspace root)
+        local search_dir="$(dirname "$abs_file")"
+        local workspace_root="$PWD"
+        while [[ "$search_dir" != "$workspace_root" && "$search_dir" != "." && "$search_dir" != "/" ]]; do
+            if [[ -f "$search_dir/manifest.json" ]]; then
+                cp "$search_dir/manifest.json" "$job_dir/"
+                break
+            fi
+            local next_dir="$(dirname "$search_dir")"
+            [[ "$next_dir" == "$search_dir" ]] && break
+            search_dir="$next_dir"
+        done
         
         # Binary naming per user request: $filename (or $filename.exe on Windows)
         local base_name=$(basename "$file")
