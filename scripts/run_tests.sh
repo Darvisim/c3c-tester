@@ -45,9 +45,9 @@ if [[ ! -f "$C3C" ]]; then
 fi
 
 progress_bar() {
-    local cur=$1 tot=$2 w=40 p=$((cur*100/(tot>0?tot:1))) f=$(printf "\xe2\x96\x88") fill=$((p*w/100))
+    local cur=${1:-0} tot=${2:-1} w=40 p=$((cur*100/(tot>0?tot:1))) f=$(printf "\xe2\x96\x88") fill=$((p*w/100))
     local bar=$(printf "%${fill}s" | tr ' ' "$f")$(printf "%$((w-fill))s")
-    [[ "$GITHUB_ACTIONS" == "true" ]] && printf " [%s] [%3d%%] (%d/%d)\n" "$bar" "$p" "$cur" "$tot" || printf "\r[%s] %3d%% (%d/%d)" "$bar" "$p" "$cur" "$tot"
+    [[ "${GITHUB_ACTIONS:-}" == "true" ]] && printf " [%s] [%3d%%] (%d/%d)\n" "$bar" "$p" "$cur" "$tot" || printf "\r[%s] %3d%% (%d/%d)" "$bar" "$p" "$cur" "$tot"
 }
 
 if [[ "$MODE" == "integration" ]]; then
@@ -268,7 +268,7 @@ else
     rm -f "$RESULTS_BUFFER"; rm -rf "$JOBS_TEMP_DIR"
 fi
 
-rm -f "$DUMMY_MAIN_FILE" "$LOG_DIR"
+rm -f "$DUMMY_MAIN_FILE"; rm -rf "$LOG_DIR"
 echo -e "\nChecks complete. Total $TOTAL, $PASSED passed, $FAILED failed."
 echo "$PLATFORM|$MODE|$TOTAL|$PASSED|$FAILED" > "$RESULT_FILE"
 for fail in "${FAILED_LIST[@]+"${FAILED_LIST[@]}"}"; do echo "$fail" >> "$RESULT_FILE"; done
