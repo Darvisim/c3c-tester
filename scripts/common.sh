@@ -73,16 +73,16 @@ ensure_executable() {
 
 # Get target binary name based on file name and platform
 get_bin_name() {
-    local file="$1"
+    local file="${1:-}"
     local base_name=$(basename "$file")
     local bin_name="${base_name%.*}"
-    [[ "$PLATFORM" == "Windows" ]] && bin_name="${bin_name}.exe"
+    [[ "${PLATFORM:-}" == "Windows" ]] && bin_name="${bin_name}.exe"
     echo "$bin_name"
 }
 
 # Check if a file is likely missing a main function
 is_main_missing() {
-    local file="$1"
+    local file="${1:-}"
     if [[ ! -f "$file" ]]; then return 0; fi
     ! grep -Eq 'fn\s+(void|int|u?[0-9]+)?\s*main\s*\(' "$file"
 }
