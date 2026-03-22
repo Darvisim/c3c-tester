@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/common.sh"
-set -euo pipefail
+# No need for set -euo pipefail here, it's in common.sh
 
 REPO_URL="$1"
 DIR="$2"

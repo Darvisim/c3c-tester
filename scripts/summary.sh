@@ -44,30 +44,25 @@ while IFS= read -r file; do
 done < <(find results -name "test_results.txt" 2>/dev/null || true)
 
 if [[ ${#rows[@]} -eq 0 ]]; then
-    log_warn "No test result files found."
-else
-    IFS=$'\n' sorted=($(printf "%s\n" "${rows[@]}" | sort))
-    unset IFS
-    for row in "${sorted[@]}"; do
+done < <(find results -name "test_results.txt" 2>/dev/null)
+
+if [[ ${#rows[@]} -gt 0 ]]; then
+    for row in $(printf "%s\n" "${rows[@]}" | sort); do
         IFS="|" read -r OS MODE TOTAL PASSED FAILED <<< "$row"
-        echo "| $OS | $MODE | $TOTAL | $PASSED | $FAILED |" >> "$GITHUB_STEP_SUMMARY"
+        printf "| %s | %s | %s | %s | %s |\n" "$OS" "$MODE" "$TOTAL" "$PASSED" "$FAILED" >> "$GITHUB_STEP_SUMMARY"
     done
 fi
-
-echo "| **TOTAL** | **ALL** | **$TOTAL_SUM** | **$PASSED_SUM** | **$FAILED_SUM** |" >> "$GITHUB_STEP_SUMMARY"
+printf "| **TOTAL** | **ALL** | **%d** | **%d** | **%d** |\n" "$TOTAL_SUM" "$PASSED_SUM" "$FAILED_SUM" >> "$GITHUB_STEP_SUMMARY"
 
 if [[ ${#FAILED_LIST_ALL[@]} -gt 0 ]]; then
-    echo -e "\n### Failures Detail" >> "$GITHUB_STEP_SUMMARY"
-    echo '```' >> "$GITHUB_STEP_SUMMARY"
-    
+    printf "\n### Failures Detail\n\`\`\`\n" >> "$GITHUB_STEP_SUMMARY"
     echo -e "\n${RED}================ GLOBAL FAILURES SUMMARY ================${NC}"
     for fail in "${FAILED_LIST_ALL[@]}"; do
         echo -e "${RED}[FAIL]${NC} $fail"
         echo "$fail" >> "$GITHUB_STEP_SUMMARY"
     done
     echo -e "${RED}========================================================${NC}\n"
-    
-    echo '```' >> "$GITHUB_STEP_SUMMARY"
+    printf "\`\`\`\n" >> "$GITHUB_STEP_SUMMARY"
 fi
 
 log_success "Summary generated."

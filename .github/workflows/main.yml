@@ -132,6 +132,10 @@ jobs:
         if: matrix.target == 'vendor'
         run: ./scripts/sync.sh https://github.com/c3lang/vendor.git vendor
 
+      - name: Fetch Vendor Libraries
+        if: matrix.target == 'vendor'
+        run: ./scripts/fetch_vendor.sh
+
       - name: Run Tests
         id: tests
         continue-on-error: true
