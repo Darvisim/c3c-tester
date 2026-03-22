@@ -298,6 +298,15 @@ else
         local job_dir="$JOBS_TEMP_DIR/$job_id"
         mkdir -p "$job_dir"
 
+        # Vendor specific logic: determine library name and add --lib flag
+        if [[ "$MODE" == "vendor" ]]; then
+            # If file is vendor/libraries/LIBNAME/..., then LIBNAME is the library
+            if [[ "$file" =~ ^vendor/libraries/([^/]+)/ ]]; then
+                local lib_name="${BASH_REMATCH[1]}"
+                extra_args="$extra_args --lib $lib_name"
+            fi
+        fi
+
         # Copy manifest.json if found in parent directories (up to workspace root)
         local search_dir="$(dirname "$abs_file")"
         local workspace_root="$PWD"
@@ -381,7 +390,7 @@ else
         fi
     }
     export -f compile_one log_info log_success log_warn log_error
-    export C3C BLUE GREEN YELLOW RED NC
+    export C3C BLUE GREEN YELLOW RED NC MODE PLATFORM
 
 
     RESULTS_BUFFER="results_buffer_${PLATFORM}_${MODE}.txt"
@@ -390,6 +399,17 @@ else
     if [[ "$MODE" == "vendor" ]]; then
         ABS_VENDOR_LIB=$(realpath vendor/libraries 2>/dev/null || echo "$PWD/vendor/libraries")
         EXTRA_ARGS="--libdir $ABS_VENDOR_LIB"
+        
+        if [ -d "$ABS_VENDOR_LIB" ]; then
+            log_info "Pre-fetching vendor libraries..."
+            # Find unique library names (directories under vendor/libraries)
+            # Use a temporary file to store unique names to avoid subshell issues with arrays
+            find "$ABS_VENDOR_LIB" -maxdepth 1 -mindepth 1 -type d | while read -r lib_path; do
+                lib_name=$(basename "$lib_path")
+                log_info "Fetching $lib_name..."
+                "$C3C" vendor-fetch "$lib_name" || log_warn "Failed to fetch $lib_name"
+            done
+        fi
     fi
 
     printf "%s\n" "${FILES[@]+"${FILES[@]}"}" | xargs -I{} -P "$JOBS" bash -c 'compile_one "$@"' _ {} "$LOG_DIR" "$EXTRA_ARGS" > "$RESULTS_BUFFER"
