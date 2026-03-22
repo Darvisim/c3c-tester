@@ -45,8 +45,9 @@ if [[ ! -f "$C3C" ]]; then
 fi
 
 progress_bar() {
-    local cur=${1:-0} tot=${2:-1} w=40 p=$((cur*100/(tot>0?tot:1))) f=$(printf "\xe2\x96\x88") fill=$((p*w/100))
-    local bar=$(printf "%${fill}s" | tr ' ' "$f")$(printf "%$((w-fill))s")
+    local cur=${1:-0} tot=${2:-1} w=40
+    local p=$((cur*100/(tot>0?tot:1))) f=$(printf "\xe2\x96\x88")
+    local fill=$((p*w/100)) bar=$(printf "%${fill}s" | tr ' ' "$f")$(printf "%$((w-fill))s")
     [[ "${GITHUB_ACTIONS:-}" == "true" ]] && printf " [%s] [%3d%%] (%d/%d)\n" "$bar" "$p" "$cur" "$tot" || printf "\r[%s] %3d%% (%d/%d)" "$bar" "$p" "$cur" "$tot"
 }
 
