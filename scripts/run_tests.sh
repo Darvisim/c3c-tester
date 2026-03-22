@@ -302,7 +302,7 @@ else
         if [[ "$MODE" == "vendor" ]]; then
             # If file is vendor/libraries/LIBNAME/..., then LIBNAME is the library
             if [[ "$file" =~ ^vendor/libraries/([^/]+)/ ]]; then
-                local lib_name="${BASH_REMATCH[1]}"
+                local lib_name="${BASH_REMATCH[1]%.c3l}"
                 extra_args="$extra_args --lib $lib_name"
             fi
         fi
@@ -406,6 +406,7 @@ else
             # Use a temporary file to store unique names to avoid subshell issues with arrays
             find "$ABS_VENDOR_LIB" -maxdepth 1 -mindepth 1 -type d | while read -r lib_path; do
                 lib_name=$(basename "$lib_path")
+                lib_name="${lib_name%.c3l}"
                 log_info "Fetching $lib_name..."
                 "$C3C" vendor-fetch "$lib_name" || log_warn "Failed to fetch $lib_name"
             done
