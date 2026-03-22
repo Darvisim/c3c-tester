@@ -266,6 +266,7 @@ else
             -not -path "*/examples/*" \
             -not -path "*/unit/*" \
             -not -path "*/test_suite/*" \
+            -not -path "*/.*" \
             \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -print0)
     done
 
@@ -406,9 +407,10 @@ else
             # Use a temporary file to store unique names to avoid subshell issues with arrays
             find "$ABS_VENDOR_LIB" -maxdepth 1 -mindepth 1 -type d | while read -r lib_path; do
                 lib_name=$(basename "$lib_path")
+                [[ "$lib_name" == .* ]] && continue
                 lib_name="${lib_name%.c3l}"
-                log_info "Fetching $lib_name..."
-                "$C3C" vendor-fetch "$lib_name" || log_warn "Failed to fetch $lib_name"
+                log_info "Fetching $lib_name in $lib_path..."
+                (cd "$lib_path" && "$C3C" vendor-fetch "$lib_name") || log_warn "Failed to fetch $lib_name"
             done
         fi
     fi
