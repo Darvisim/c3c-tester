@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-
-# Shared CI logic
 set -euo pipefail
 
-# Colors for logging
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -15,7 +12,6 @@ log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
 
-# Detect OS/Platform
 OS="${RUNNER_OS:-$(uname -s)}"
 case "$OS" in
     Linux*)                PLATFORM="Linux" ;;
@@ -24,7 +20,6 @@ case "$OS" in
     *)                     PLATFORM="Unknown" ;;
 esac
 
-# Check if commands exist
 check_deps() {
     for cmd in "$@"; do
         if ! command -v "$cmd" &>/dev/null; then return 1; fi
@@ -32,58 +27,32 @@ check_deps() {
     return 0
 }
 
-# Compiler path normalization with robust absolute discovery
 get_c3c_path() {
-    local bin_name="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
-    local base_path="./c3c/build/$bin_name"
-
-    local search_paths=(
-        "$base_path"
-        "./c3c/build/Release/$bin_name"
-        "./c3c/build/Debug/$bin_name"
-        "./c3c/build/bin/$bin_name"
-    )
-    
-    # 1. Try known paths
-    for p in "${search_paths[@]}"; do
-        if [[ -f "$p" ]]; then
-            echo "$(realpath "$p")"
-            return
-        fi
+    local bin="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
+    local base="./c3c/build/$bin"
+    local paths=("$base" "./c3c/build/Release/$bin" "./c3c/build/Debug/$bin" "./c3c/build/bin/$bin")
+    for p in "${paths[@]}"; do
+        if [[ -f "$p" ]]; then echo "$(realpath "$p")"; return; fi
     done
-    
-    # 2. Try generic search in build dir
-    local found=$(find ./c3c/build -name "$bin_name" -type f 2>/dev/null | head -n 1)
-    if [[ -n "$found" ]]; then
-        echo "$(realpath "$found")"
-        return
-    fi
-    
-    # 3. Fallback
-    realpath "$base_path" 2>/dev/null || echo "$base_path"
+    local found=$(find ./c3c/build -name "$bin" -type f 2>/dev/null | head -n 1)
+    if [[ -n "$found" ]]; then echo "$(realpath "$found")"; return; fi
+    realpath "$base" 2>/dev/null || echo "$base"
 }
 
-# Ensure execution permissions on Unix
 ensure_executable() {
-    local file="$1"
-    if [[ "$PLATFORM" != "Windows" && -f "$file" ]]; then
-        chmod +x "$file"
-    fi
+    if [[ "$PLATFORM" != "Windows" && -f "$1" ]]; then chmod +x "$1"; fi
 }
 
-# Get target binary name based on file name and platform
 get_bin_name() {
-    local file="${1:-}"
-    local base_name=$(basename "$file")
-    local bin_name="${base_name%.*}"
-    [[ "${PLATFORM:-}" == "Windows" ]] && bin_name="${bin_name}.exe"
-    echo "$bin_name"
+    local f="${1:-}"
+    local b=$(basename "$f")
+    local n="${b%.*}"
+    [[ "${PLATFORM:-}" == "Windows" ]] && n="${n}.exe"
+    echo "$n"
 }
 
-# Check if a file is likely missing a main function
 is_main_missing() {
-    local file="${1:-}"
-    if [[ ! -f "$file" ]]; then return 0; fi
-    # Simple check for main entry point
-    ! grep -Eq 'fn\s+(void|int|u?[0-9]+)?\s*main\s*\(' "$file"
+    local f="${1:-}"
+    if [[ ! -f "$f" ]]; then return 0; fi
+    ! grep -Eq 'fn\s+(void|int|u?[0-9]+)?\s*main\s*\(' "$f"
 }

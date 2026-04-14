@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/common.sh"
-URL="$1"
-DIR="$2"
-echo "::group::Syncing $DIR"
-if [ -d "$DIR/.git" ]; then
-    log_info "Updating $DIR"
-    git -C "$DIR" fetch origin && git -C "$DIR" reset --hard origin/HEAD
+
+U="$1"
+D="$2"
+
+echo "::group::Syncing $D"
+
+if [ -d "$D/.git" ]; then
+    log_info "Updating $D"
+    git -C "$D" fetch origin && git -C "$D" reset --hard origin/HEAD
 else
-    [ -d "$DIR" ] && { log_warn "Recreating $DIR"; rm -rf "$DIR"; }
-    log_info "Cloning $URL"
-    git clone --depth 1 "$URL" "$DIR"
+    [ -d "$D" ] && { log_warn "Recreating $D"; rm -rf "$D"; }
+    log_info "Cloning $U"
+    git clone --depth 1 "$U" "$D"
 fi
-log_success "$DIR synced (commit: $(git -C "$DIR" rev-parse --short HEAD 2>/dev/null || echo "??"))"
+
+log_success "$D synced (commit: $(git -C "$D" rev-parse --short HEAD 2>/dev/null || echo "??"))"
 echo "::endgroup::"
