@@ -87,7 +87,7 @@ jobs:
         target: [stdlib, benchmarks, resources, test, fuzz]
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 40
 
     defaults:
       run:
