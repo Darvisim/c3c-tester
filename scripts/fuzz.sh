@@ -45,7 +45,7 @@ while [[ -z "${FUZZ_LIMIT:-}" ]] || [[ $count -lt $FUZZ_LIMIT ]]; do
     gen_random_c3 "$target"
     
     # Run compiler
-    local bin="${target%.*}"
+    bin=$(get_bin_name "$target")
     out=$("$C3C" compile "$target" -o "$bin" 2>&1)
     status=$?
     

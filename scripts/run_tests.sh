@@ -24,7 +24,10 @@ ensure_executable "$C3C"
 [[ ! -f "$C3C" ]] && { log_error "C3C missing"; echo "$PLATFORM|$MODE|0|0|0" > "$RESULT_FILE"; exit 0; }
 
 progress_bar() {
-    local c=${1:-0} t=${2:-1} w=40 p=$((c*100/(t>0?t:1)))
+    local c=${1:-0}
+    local t=${2:-1}
+    local w=40
+    local p=$((c*100/(t>0?t:1)))
     local f=$([[ "$PLATFORM" == "Windows" ]] && echo "#" || printf "\xe2\x96\x88")
     local l=$((p*w/100))
     local b=$(printf "%${l}s" | tr ' ' "$f")$(printf "%$((w-l))s")
