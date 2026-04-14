@@ -13,11 +13,9 @@ while IFS= read -r f; do
     read -r h < "$f"
     IFS="|" read -r OS MOD TOT PAS FAL <<< "$h"
     [[ -n "$OS" && -n "$MOD" ]] || continue
-    
     DATA["$MOD,$OS"]="$PAS/$TOT"
     [[ ! " ${OSS[*]} " =~ " ${OS} " ]] && OSS+=("$OS")
     [[ ! " ${TARGETS[*]} " =~ " ${MOD} " ]] && TARGETS+=("$MOD")
-    
     ((T_SUM+=TOT, P_SUM+=PAS, F_SUM+=FAL)) || true
     while read -r fail; do FAILS+=("[$OS/$MOD] $fail"); done < <(tail -n +2 "$f")
 done < <(find results -name "test_results.txt" 2>/dev/null)
@@ -25,21 +23,31 @@ done < <(find results -name "test_results.txt" 2>/dev/null)
 OSS=($(printf "%s\n" "${OSS[@]}" | sort))
 TARGETS=($(printf "%s\n" "${TARGETS[@]}" | sort))
 
-printf "### Test Results Matrix\n\n| Target | %s |\n| :--- | %s |\n" "$(IFS=' | '; echo "${OSS[*]}")" "$(printf ' :---: |%.0s' "${OSS[@]}")" >> "$GITHUB_STEP_SUMMARY"
+H="| Target | "
+S="| :--- | "
+for os in "${OSS[@]}"; do
+    H+="$os | "
+    S+=":---: | "
+done
+
+echo "" >> "$GITHUB_STEP_SUMMARY"
+echo "$H" >> "$GITHUB_STEP_SUMMARY"
+echo "$S" >> "$GITHUB_STEP_SUMMARY"
 
 for t in "${TARGETS[@]}"; do
-    row="| **$t** "
+    r="| **$t** "
     for os in "${OSS[@]}"; do
-        val="${DATA["$t,$os"]:-N/A}"
-        if [[ "$val" != "N/A" ]]; then
-            IFS="/" read -r p tot <<< "$val"
-            color=$([ "$p" -eq "$tot" ] && echo "green" || echo "red")
-            row+="| $\color{$color}{\textsf{$val}}$ "
+        v="${DATA["$t,$os"]:-N/A}"
+        if [[ "$v" != "N/A" ]]; then
+            IFS="/" read -r p tot <<< "$v"
+            col=$([ "$p" -eq "$tot" ] && echo "brightgreen" || echo "red")
+            tag=$(echo "$v" | sed 's/\//%2F/g')
+            r+="| ![$v](https://img.shields.io/badge/-${tag}-${col}?style=flat-square) "
         else
-            row+="| - "
+            r+="| - "
         fi
     done
-    echo "$row |" >> "$GITHUB_STEP_SUMMARY"
+    echo "$r |" >> "$GITHUB_STEP_SUMMARY"
 done
 
 printf "\n**Total Progress: %d/%d Passes (%d Failures)**\n\n" "$P_SUM" "$T_SUM" "$F_SUM" >> "$GITHUB_STEP_SUMMARY"
@@ -54,4 +62,4 @@ if [[ ${#FAILS[@]} -gt 0 ]]; then
     printf "\`\`\`\n" >> "$GITHUB_STEP_SUMMARY"
 fi
 
-log_success "Matrix dashboard generated."
+log_success "Matrix generated."
