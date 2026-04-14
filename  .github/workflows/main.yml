@@ -48,9 +48,8 @@ jobs:
         with:
           arch: x64
 
-      - &cache
-        name: Cache C3 Compiler Repo
-        uses: actions/cache@v5
+      - name: Cache C3 Compiler Repo
+        uses: &cache actions/cache@v5
         with:
           path: c3c
           key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
@@ -61,7 +60,7 @@ jobs:
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
       - name: Cache LLVM
-        uses: actions/cache@v5
+        uses: *cache
         with:
           path: c3c/build/_deps
           key: ${{ runner.os }}-llvm-${{ hashFiles('c3c/CMakeLists.txt') }}
@@ -98,7 +97,14 @@ jobs:
       - *checkout
       - *chmod
       - *msvc
-      - *cache
+
+      - name: Restore Cached C3 Compiler Repo
+        uses: actions/cache/restore@v5
+        with:
+          path: c3c
+          key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-
+
       - *sync
 
       - name: Download Compiler
