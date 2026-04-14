@@ -18,10 +18,10 @@ log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
 # Detect OS/Platform
 OS="${RUNNER_OS:-$(uname -s)}"
 case "$OS" in
-    Linux*)     PLATFORM="Linux" ;;
-    Darwin*|macOS*)    PLATFORM="macOS" ;;
+    Linux*)                PLATFORM="Linux" ;;
+    Darwin*|macOS*)        PLATFORM="macOS" ;;
     Windows*|MINGW*|MSYS*) PLATFORM="Windows" ;;
-    *)          PLATFORM="Unknown" ;;
+    *)                     PLATFORM="Unknown" ;;
 esac
 
 # Check if commands exist
@@ -53,7 +53,7 @@ get_c3c_path() {
     done
     
     # 2. Try generic search in build dir
-    local found=$(find ./c3c/build -name "$bin_name" -type f | head -n 1)
+    local found=$(find ./c3c/build -name "$bin_name" -type f 2>/dev/null | head -n 1)
     if [[ -n "$found" ]]; then
         echo "$(realpath "$found")"
         return
@@ -84,5 +84,6 @@ get_bin_name() {
 is_main_missing() {
     local file="${1:-}"
     if [[ ! -f "$file" ]]; then return 0; fi
+    # Simple check for main entry point
     ! grep -Eq 'fn\s+(void|int|u?[0-9]+)?\s*main\s*\(' "$file"
 }

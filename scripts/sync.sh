@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/common.sh"
-URL="$1"; DIR="$2"
+URL="$1"
+DIR="$2"
 echo "::group::Syncing $DIR"
 if [ -d "$DIR/.git" ]; then
     log_info "Updating $DIR"

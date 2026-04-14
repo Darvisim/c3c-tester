@@ -3,7 +3,7 @@ source "$(dirname "$0")/common.sh"
 log_info "Building C3 Compiler on $PLATFORM..."
 
 echo "::group::Build"
-cmake -S ./c3c -B ./c3c/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DC3_FETCH_LLVM=ON && cmake --build ./c3c/build
+cmake -S "./c3c" -B "./c3c/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DC3_FETCH_LLVM=ON && cmake --build "./c3c/build"
 echo "::endgroup::"
 
 C3C=$(get_c3c_path) && ensure_executable "$C3C"

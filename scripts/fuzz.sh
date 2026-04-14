@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/common.sh"
+set +e
 
 C3C=$(get_c3c_path)
 ensure_executable "$C3C"
