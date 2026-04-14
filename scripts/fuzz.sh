@@ -46,7 +46,6 @@ while [[ -z "${FUZZ_LIMIT:-}" ]] || [[ $count -lt $FUZZ_LIMIT ]]; do
     
     # Run compiler
     local bin="${target%.*}"
-    [[ "$PLATFORM" == "Windows" ]] && bin="${bin}.exe"
     out=$("$C3C" compile "$target" -o "$bin" 2>&1)
     status=$?
     

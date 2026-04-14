@@ -47,7 +47,7 @@ ensure_executable() { [[ "$PLATFORM" != "Windows" && -f "$1" ]] && chmod +x "$1"
 # Binary name
 get_bin_name() {
     local b=$(basename "${1:-}")
-    echo "${b%.*}$([[ "$PLATFORM" == "Windows" ]] && echo ".exe")"
+    echo "${b%.*}"
 }
 
 # Robust main check
