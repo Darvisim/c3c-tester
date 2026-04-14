@@ -34,11 +34,11 @@ check_deps() {
 # Compiler path discovery
 get_c3c_path() {
     local bin="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe")"
-    local paths=("./c3c/build/$bin" "./c3c/build/Release/$bin" "./c3c/build/bin/$bin")
+    local paths=("./c3c/build/$bin" "./c3c/build/Release/$bin" "/c/c3/build/$bin")
     for p in "${paths[@]}"; do [[ -f "$p" ]] && { realpath "$p"; return; }; done
-    local found=$(find ./c3c/build -name "$bin" -type f 2>/dev/null | head -n 1)
+    local found=$(find ./c3c/build /c/c3/build -maxdepth 4 -name "$bin" -type f 2>/dev/null | head -n 1)
     [[ -n "$found" ]] && { realpath "$found"; return; }
-    realpath "./c3c/build/$bin" 2>/dev/null || echo "./c3c/build/$bin"
+    echo "./c3c/build/$bin"
 }
 
 # Permissions
