@@ -13,9 +13,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
 
   build-compiler:
@@ -44,20 +41,23 @@ jobs:
       - name: Setup Dependencies
         run: ./scripts/setup.sh
 
-      - name: Setup MSVC
+      - &msvc
+        name: Setup MSVC
         if: matrix.os == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      - name: Cache C3 Compiler Repo
+      - &cache
+        name: Cache C3 Compiler Repo
         uses: actions/cache@v5
         with:
           path: c3c
           key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
           restore-keys: ${{ runner.os }}-
 
-      - name: Sync C3 Compiler
+      - &sync
+        name: Sync C3 Compiler
         run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
 
       - name: Cache LLVM
@@ -71,7 +71,7 @@ jobs:
         run: ./scripts/compiler.sh
 
       - name: Upload Compiler
-        uses: actions/upload-artifact@v6
+        uses: &upload actions/upload-artifact@v6
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
@@ -85,7 +85,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        target: [compiler, vendor, integration]
+        target: [stdlib, benchmarks, resources, test, fuzz]
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -97,44 +97,15 @@ jobs:
     steps:
       - *checkout
       - *chmod
-
-      - name: Setup MSVC
-        if: matrix.os == 'windows-latest'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Cache C3 Compiler Repo
-        uses: actions/cache/restore@v5
-        with:
-          path: c3c
-          key: ${{ runner.os }}-c3c-repo-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-
-
-      - name: Sync C3 Compiler repo
-        run: ./scripts/sync.sh https://github.com/c3lang/c3c.git c3c
+      - *msvc
+      - *cache
+      - *sync
 
       - name: Download Compiler
-        uses: actions/download-artifact@v7
+        uses: &download actions/download-artifact@v7
         with:
           name: c3c-${{ runner.os }}
           path: c3c/build
-
-      - name: Cache Vendor Repo
-        uses: actions/cache@v5
-        if: matrix.target == 'vendor'
-        with:
-          path: vendor
-          key: ${{ runner.os }}-vendor-repo-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-
-
-      - name: Sync Vendor
-        if: matrix.target == 'vendor'
-        run: ./scripts/sync.sh https://github.com/c3lang/vendor.git vendor
-
-      - name: Fetch Vendor Libraries
-        if: matrix.target == 'vendor'
-        run: ./scripts/fetch_vendor.sh
 
       - name: Run Tests
         id: tests
@@ -142,12 +113,11 @@ jobs:
         run: ./scripts/run_tests.sh ${{ matrix.target }}
 
       - name: Upload Test Results
-        uses: actions/upload-artifact@v6
+        uses: *upload
         with:
           name: results-${{ runner.os }}-${{ matrix.target }}
           path: results-*/test_results.txt
           retention-days: 1
-
 
   summary:
     name: Final Test Results
@@ -164,7 +134,7 @@ jobs:
       - *chmod
 
       - name: Download all test results
-        uses: actions/download-artifact@v7
+        uses: *download
         with:
           path: results
 

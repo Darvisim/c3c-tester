@@ -20,7 +20,7 @@ OS="${RUNNER_OS:-}"
 [[ -z "$OS" ]] && OS=$(uname -s)
 case "$OS" in
     Linux*)   PLATFORM="Linux" ;;
-    Darwin*)  PLATFORM="macOS" ;;
+    Darwin*|macOS*)  PLATFORM="macOS" ;;
     Windows*|MINGW*|MSYS*) PLATFORM="Windows" ;;
     *)        PLATFORM="Unknown" ;;
 esac

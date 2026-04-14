@@ -65,6 +65,7 @@ run_one() {
     
     local cmd="compile"
     [[ "$mode" == "test" ]] && cmd="compile-test"
+    [[ "$mode" == "benchmarks" ]] && cmd="compile-benchmark"
     [[ "$mode" == "resources" ]] && { (cd "$jdir" && "$C3C" init >/dev/null 2>&1); }
 
     local tries=0 max=2 inj=$(is_main_missing "$file" && echo 1 || echo 0)
