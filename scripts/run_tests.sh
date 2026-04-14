@@ -5,12 +5,15 @@ set +e +o pipefail
 MODE="${1:-stdlib}"
 RES_DIR="results-${PLATFORM}-${MODE}"
 mkdir -p "$RES_DIR"
+
 RES_FILE="$RES_DIR/test_results.txt"
 LOG_DIR="test_logs_${PLATFORM}_${MODE}"
 mkdir -p "$LOG_DIR"
+
 DUMMY="$(realpath "$RES_DIR" 2>/dev/null || echo "$RES_DIR")/_dummy.c3"
 echo "fn void main() => 0;" > "$DUMMY"
 export DUMMY
+
 PASSED=0; FAILED=0; COUNT=0; TOTAL=0; FAILS=()
 STRICT="${STRICT_MODE:-false}"
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
@@ -50,6 +53,7 @@ run_one() {
     local jd=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3j')
     local bin=$(get_bin_name "$f")
     local c="compile" && [[ "$m" == "benchmarks" ]] && c="compile-benchmark"
+    [[ "$m" == "resources" ]] && { (cd "$jd" && "$C3C" init >/dev/null 2>&1); }
     while :; do
         status=0
         [[ $inj -eq 1 ]] && out=$(cd "$jd" && "$C3C" $c -o "$bin" "$af" "$ad" 2>&1) || out=$(cd "$jd" && "$C3C" $c -o "$bin" "$af" 2>&1)
@@ -68,21 +72,18 @@ if [[ "$MODE" == "fuzz" ]]; then
     "$(dirname "$0")/fuzz.sh"
     s=$?; echo "$PLATFORM|$MODE|1000|$([ $s -eq 0 ] && echo 1000 || echo 999)|$([ $s -eq 0 ] && echo 0 || echo 1)" > "$RES_FILE"
     exit $s
-elif [[ "$MODE" == "test" || "$MODE" == "resources" ]]; then
+
+elif [[ "$MODE" == "test" ]]; then
     W=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3b')
-    cp -r "c3c/test" "c3c/resources" "$W/" 2>/dev/null || true
-    if [[ "$MODE" == "test" ]]; then
-        TOTAL=2
-        [ -d "$W/test/unit" ] && run_bundle "Unit" "\$C3C compile-test unit -O1" "$W/test"
-        [ -f "$W/test/src/test_suite_runner.c3" ] && run_bundle "Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$W/test"
-    else
-        D=($(find "$W/resources" -maxdepth 2 -name "*.c3" -exec dirname {} \; | sort -u))
-        TOTAL=${#D[@]}
-        for d in "${D[@]}"; do rel="${d#$W/resources/}"; run_bundle "res/$rel" "\$C3C compile ." "$d"; done
-    fi
+    cp -r "c3c/test" "$W/" 2>/dev/null || true
+    TOTAL=2
+    [ -d "$W/test/unit" ] && run_bundle "Unit" "\$C3C compile-test unit -O1" "$W/test"
+    [ -f "$W/test/src/test_suite_runner.c3" ] && run_bundle "Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$W/test"
     rm -rf "$W"
+
 else
     B="c3c/lib/std" && [[ "$MODE" == "benchmarks" ]] && B="c3c/benchmarks/stdlib"
+    [[ "$MODE" == "resources" ]] && B="c3c/resources"
     F=($(find "$B" -type f \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -not -path "*/.*" -print0 | xargs -0 echo))
     TOTAL=${#F[@]}
     [[ "$TOTAL" -eq 0 ]] && { log_warn "No files found for $MODE"; echo "$PLATFORM|$MODE|0|0|0" > "$RES_FILE"; exit 0; }
