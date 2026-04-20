@@ -15,8 +15,8 @@ while IFS= read -r f; do
     IFS="|" read -r OS MOD TOT PAS FAL <<< "$h"
     [[ -n "$OS" && -n "$MOD" ]] || continue
     DATA["$MOD,$OS"]="$PAS/$TOT"
-    [[ ! " ${OSS[*]} " =~ " ${OS} " ]] && OSS+=("$OS")
-    [[ ! " ${TARGETS[*]} " =~ " ${MOD} " ]] && TARGETS+=("$MOD")
+    [[ ! " ${OSS[*]} " == *" ${OS} "* ]] && OSS+=("$OS")
+    [[ ! " ${TARGETS[*]} " == *" ${MOD} "* ]] && TARGETS+=("$MOD")
     ((T_SUM+=${TOT:-0}, P_SUM+=${PAS:-0}, F_SUM+=${FAL:-0})) || true
     while read -r fail; do FAILS+=("[$OS/$MOD] $fail"); done < <(tail -n +2 "$f")
 done < <(find results -name "test_results.txt" 2>/dev/null)
