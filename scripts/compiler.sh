@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source=scripts/common.sh
 source "$(dirname "$0")/common.sh"
 
 log_info "Building C3 on $PLATFORM..."

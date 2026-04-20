@@ -28,14 +28,16 @@ check_deps() {
 }
 
 get_c3c_path() {
-    local bin="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
+    local bin
+    bin="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
     local base="./c3c/build/$bin"
     local paths=("$base" "./c3c/build/Release/$bin" "./c3c/build/Debug/$bin" "./c3c/build/bin/$bin")
     for p in "${paths[@]}"; do
-        if [[ -f "$p" ]]; then echo "$(realpath "$p")"; return; fi
+        if [[ -f "$p" ]]; then realpath "$p"; return; fi
     done
-    local found=$(find ./c3c/build -name "$bin" -type f 2>/dev/null | head -n 1)
-    if [[ -n "$found" ]]; then echo "$(realpath "$found")"; return; fi
+    local found
+    found=$(find ./c3c/build -name "$bin" -type f 2>/dev/null | head -n 1)
+    if [[ -n "$found" ]]; then realpath "$found"; return; fi
     realpath "$base" 2>/dev/null || echo "$base"
 }
 
@@ -45,7 +47,8 @@ ensure_executable() {
 
 get_bin_name() {
     local f="${1:-}"
-    local b=$(basename "$f")
+    local b
+    b=$(basename "$f")
     local n="${b%.*}"
     [[ "${PLATFORM:-}" == "Windows" ]] && n="${n}.exe"
     echo "$n"

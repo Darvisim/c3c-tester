@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source=scripts/common.sh
 source "$(dirname "$0")/common.sh"
 log_info "Generating matrix summary..."
 [ -z "${GITHUB_STEP_SUMMARY:-}" ] && GITHUB_STEP_SUMMARY="/dev/null"
@@ -16,12 +17,12 @@ while IFS= read -r f; do
     DATA["$MOD,$OS"]="$PAS/$TOT"
     [[ ! " ${OSS[*]} " =~ " ${OS} " ]] && OSS+=("$OS")
     [[ ! " ${TARGETS[*]} " =~ " ${MOD} " ]] && TARGETS+=("$MOD")
-    ((T_SUM+=TOT, P_SUM+=PAS, F_SUM+=FAL)) || true
+    ((T_SUM+=${TOT:-0}, P_SUM+=${PAS:-0}, F_SUM+=${FAL:-0})) || true
     while read -r fail; do FAILS+=("[$OS/$MOD] $fail"); done < <(tail -n +2 "$f")
 done < <(find results -name "test_results.txt" 2>/dev/null)
 
-OSS=($(printf "%s\n" "${OSS[@]}" | sort))
-TARGETS=($(printf "%s\n" "${TARGETS[@]}" | sort))
+mapfile -t OSS < <(printf "%s\n" "${OSS[@]}" | sort)
+mapfile -t TARGETS < <(printf "%s\n" "${TARGETS[@]}" | sort)
 
 H="| Target | "
 S="| :--- | "
@@ -30,9 +31,11 @@ for os in "${OSS[@]}"; do
     S+=":---: | "
 done
 
-echo "" >> "$GITHUB_STEP_SUMMARY"
-echo "$H" >> "$GITHUB_STEP_SUMMARY"
-echo "$S" >> "$GITHUB_STEP_SUMMARY"
+{
+    echo ""
+    echo "$H"
+    echo "$S"
+} >> "$GITHUB_STEP_SUMMARY"
 
 for t in "${TARGETS[@]}"; do
     r="| **$t** "
@@ -41,7 +44,7 @@ for t in "${TARGETS[@]}"; do
         if [[ "$v" != "N/A" ]]; then
             IFS="/" read -r p tot <<< "$v"
             col=$([ "$p" -eq "$tot" ] && echo "brightgreen" || echo "red")
-            tag=$(echo "$v" | sed 's/\//%2F/g')
+            tag=${v//\//%2F}
             r+="| ![$v](https://img.shields.io/badge/-${tag}-${col}?style=flat-square) "
         else
             r+="| - "

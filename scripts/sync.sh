@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+# shellcheck source=scripts/common.sh
 source "$(dirname "$0")/common.sh"
 
-U="$1"
-D="$2"
+[[ $# -lt 2 ]] && { log_error "Usage: $0 <url> <directory>"; exit 1; }
+U="${1:-}"
+D="${2:-}"
 
 echo "::group::Syncing $D"
 

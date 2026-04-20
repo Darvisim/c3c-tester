@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source=scripts/common.sh
 source "$(dirname "$0")/common.sh"
 set +e +o pipefail
 
@@ -25,14 +26,19 @@ ensure_executable "$C3C"
 progress() {
     local c=${1:-0}; local t=${2:-1}; local w=40
     local p=$((c*100/(t>0?t:1))); local f="#"
-    local l=$((p*w/100)); local b=$(printf "%${l}s" | tr ' ' "$f")$(printf "%$((w-l))s")
+    local l=$((p*w/100))
+    local b
+    b=$(printf "%${l}s" | tr ' ' "$f")$(printf "%$((w-l))s")
     [[ "${GITHUB_ACTIONS:-}" == "true" ]] && printf " [%s] [%3d%%] (%d/%d)\n" "$b" "$p" "$c" "$t" || printf "\r[%s] %3d%% (%d/%d)" "$b" "$p" "$c" "$t"
 }
 
 run_bundle() {
-    local n="$1" cmd="$2" d="${3:-.}" start=$(date +%s%N) status=0 out=""
+    local n="$1" cmd="$2" d="${3:-.}" status=0 out=""
+    local start
+    start=$(date +%s%N)
     echo "::group::$n"
-    local c3_q=$(printf '%q' "$C3C")
+    local c3_q
+    c3_q=$(printf '%q' "$C3C")
     local r_cmd="${cmd//\$C3C/$c3_q}"
     out=$(cd "$d" && eval "$r_cmd" 2>&1) || status=$?
     if [[ $status -ne 0 ]] && [[ "$out" == *"The 'main' function"* ]]; then
@@ -46,24 +52,27 @@ run_bundle() {
     progress "$COUNT" "$TOTAL" && echo ""
 }
 
+# shellcheck disable=SC2329
 run_one() {
-    local f=$1 m=$2 ld=$3 start=$(date +%s%N) status=0 out="" inj=0
-    local af=$(realpath "$f" 2>/dev/null || echo "$f")
-    local ad=$(realpath "$DUMMY" 2>/dev/null || echo "$DUMMY")
-    local jd=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3j')
-    local bin=$(get_bin_name "$f")
+    local f=$1 m=$2 ld=$3 status=0 out="" inj=0
+    local start af ad jd bin
+    start=$(date +%s%N)
+    af=$(realpath "$f" 2>/dev/null || echo "$f")
+    ad=$(realpath "$DUMMY" 2>/dev/null || echo "$DUMMY")
+    jd=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3j')
+    bin=$(get_bin_name "$f")
     local c="compile" && [[ "$m" == "benchmarks" ]] && c="compile-benchmark"
     [[ "$m" == "resources" ]] && { (cd "$jd" && "$C3C" init >/dev/null 2>&1); }
     while :; do
         status=0
-        [[ $inj -eq 1 ]] && out=$(cd "$jd" && "$C3C" $c -o "$bin" "$af" "$ad" 2>&1) || out=$(cd "$jd" && "$C3C" $c -o "$bin" "$af" 2>&1)
+        [[ $inj -eq 1 ]] && out=$(cd "$jd" && "$C3C" "$c" -o "$bin" "$af" "$ad" 2>&1) || out=$(cd "$jd" && "$C3C" "$c" -o "$bin" "$af" 2>&1)
         [[ $status -eq 0 ]] && break
         [[ "$out" == *"The 'main' function"* ]] && [[ $inj -eq 0 ]] && { inj=1; continue; }
         break
     done
     rm -rf "$jd"
     dur=$(awk "BEGIN {printf \"%.3f\", ($(date +%s%N)-$start)/1000000000}")
-    printf "%s\n" "$out" > "${ld}/$(echo "$f" | sed 's/[^[:alnum:]]/_/g').log"
+    printf "%s\n" "$out" > "${ld}/${f//[^[:alnum:]]/_}.log"
     echo "RESULT:$([[ $status -eq 0 ]] && echo "PASS" || echo "FAIL")|$f|$dur|$inj"
 }
 
@@ -78,7 +87,7 @@ if [[ "$MODE" == "test" ]]; then
 else
     B="c3c/lib/std" && [[ "$MODE" == "benchmarks" ]] && B="c3c/benchmarks/stdlib"
     [[ "$MODE" == "resources" ]] && B="c3c/resources"
-    F=($(find "$B" -type f \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -not -path "*/.*" -print0 | xargs -0 echo))
+    mapfile -t F < <(find "$B" -type f \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -not -path "*/.*" -print0 | xargs -0 echo)
     TOTAL=${#F[@]}
     [[ "$TOTAL" -eq 0 ]] && { log_warn "No files found for $MODE"; echo "$PLATFORM|$MODE|0|0|0" > "$RES_FILE"; exit 0; }
     log_info "Running granular $MODE ($TOTAL files) on $JOBS jobs"
@@ -88,9 +97,9 @@ else
     printf "%s\n" "${F[@]}" | xargs -I{} -P "$JOBS" bash -c 'run_one "$@"' _ {} "$MODE" "$LOG_DIR" > "$BUFF"
     while read -r l; do
         [[ "$l" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]] || continue
-        res=${BASH_REMATCH[1]}; f=${BASH_REMATCH[2]}; d=${BASH_REMATCH[3]}; i=${BASH_REMATCH[4]}
+        res=${BASH_REMATCH[1]}; f=${BASH_REMATCH[2]}; d=${BASH_REMATCH[3]}
         ((COUNT++)); echo "::group::$f ($d s)"
-        cat "${LOG_DIR}/$(echo "$f" | sed 's/[^[:alnum:]]/_/g').log" 2>/dev/null; echo "::endgroup::"
+        cat "${LOG_DIR}/${f//[^[:alnum:]]/_}.log" 2>/dev/null; echo "::endgroup::"
         if [[ "$res" == "PASS" ]]; then ((PASSED++)); log_success "$f: Passed"
         else ((FAILED++)); FAILS+=("$f"); log_error "$f: Failed"; fi
         progress "$COUNT" "$TOTAL" && echo ""
