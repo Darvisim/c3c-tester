@@ -68,9 +68,9 @@ run_one() {
 }
 
 if [[ "$MODE" == "fuzz" ]]; then
-    export FUZZ_LIMIT=${FUZZ_LIMIT:-1000}
+    export FUZZ_TIME=${FUZZ_TIME:-300}
     "$(dirname "$0")/fuzz.sh"
-    s=$?; echo "$PLATFORM|$MODE|1000|$([ $s -eq 0 ] && echo 1000 || echo 999)|$([ $s -eq 0 ] && echo 0 || echo 1)" > "$RES_FILE"
+    s=$?; echo "$PLATFORM|$MODE|1|$([ $s -eq 0 ] && echo 1 || echo 0)|$([ $s -eq 0 ] && echo 0 || echo 1)" > "$RES_FILE"
     exit $s
 
 elif [[ "$MODE" == "test" ]]; then

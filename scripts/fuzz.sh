@@ -5,53 +5,59 @@ set +e
 C3C=$(get_c3c_path)
 ensure_executable "$C3C"
 
-FUZZ_DIR="fuzz_results"
-mkdir -p "$FUZZ_DIR"
+FUZZ_REPO="https://github.com/ManuLinares/c3fuzz"
+FUZZ_DIR="c3fuzz"
 
-gen_random_c3() {
-    local f=$1
-    echo "module fuzz;" > "$f"
-    echo "import std::io;" >> "$f"
-    for i in {1..5}; do
-        case $((RANDOM % 3)) in
-            0) echo "struct S$i { int a; double b; }" >> "$f" ;;
-            1) echo "enum E$i : int { A, B, C }" >> "$f" ;;
-            2) echo "type T$i = int;" >> "$f" ;;
-        esac
-    done
-    for i in {1..10}; do
-        echo "fn void func$i() {" >> "$f"
-        for j in {1..5}; do
-            case $((RANDOM % 3)) in
-                0) echo "  int x = $((RANDOM % 100));" >> "$f" ;;
-                1) echo "  if (x > 50) { std::io::printn(\"high\"); }" >> "$f" ;;
-                2) echo "  for (int k = 0; k < 10; k++) { x += k; }" >> "$f" ;;
-            esac
-        done
-        echo "}" >> "$f"
-    done
-    echo "fn void main() { func1(); }" >> "$f"
-}
+if [ ! -d "$FUZZ_DIR" ]; then
+    log_info "Cloning c3fuzz..."
+    git clone --depth 1 "$FUZZ_REPO" "$FUZZ_DIR"
+fi
 
-log_info "Fuzzing (Limit: ${FUZZ_LIMIT:-infinite})..."
-count=0; crashes=0
+pushd "$FUZZ_DIR" > /dev/null || exit 1
 
-while [[ -z "${FUZZ_LIMIT:-}" ]] || [[ $count -lt $FUZZ_LIMIT ]]; do
-    ((count++))
-    target="$FUZZ_DIR/fuzz_$count.c3"
-    gen_random_c3 "$target"
-    bin=$(get_bin_name "$target")
-    out=$("$C3C" compile "$target" -o "$bin" 2>&1)
-    s=$?
-    if [[ $s -ge 128 ]]; then
-        log_error "CRASH DETECTED! Saved to $target"
-        echo "$out" > "$target.log"
-        ((crashes++))
-    else
-        rm -f "$target"
+log_info "Building c3fuzz..."
+# Build the fuzzer using the current c3c
+BUILD_CMD=("$C3C" build)
+
+# On Windows, we might need to point to vcpkg libraries if tree-sitter was installed there
+if [[ "$PLATFORM" == "Windows" ]]; then
+    if [[ -n "$VCPKG_INSTALLATION_ROOT" ]]; then
+        VCPKG_LIB_PATH="$VCPKG_INSTALLATION_ROOT/installed/x64-windows/lib"
+        if [ -d "$VCPKG_LIB_PATH" ]; then
+            log_info "Adding vcpkg lib path: $VCPKG_LIB_PATH"
+            BUILD_CMD+=("-L" "$VCPKG_LIB_PATH")
+        fi
     fi
-    [[ $((count % 100)) -eq 0 ]] && log_info "Fuzzed $count..."
-done
+fi
 
-log_info "Total: $count, Crashes: $crashes"
-[[ $crashes -gt 0 ]] && exit 1 || exit 0
+"${BUILD_CMD[@]}"
+
+if [ ! -f "build/c3fuzz" ] && [ ! -f "build/c3fuzz.exe" ]; then
+    log_error "Failed to build c3fuzz"
+    popd > /dev/null
+    exit 1
+fi
+
+FUZZ_BIN="./build/c3fuzz"
+[[ "$PLATFORM" == "Windows" ]] && FUZZ_BIN="./build/c3fuzz.exe"
+
+log_info "Running c3fuzz for ${FUZZ_TIME:-300} seconds..."
+mkdir -p crash segfault timeout
+# Running the fuzzer. -t is time in seconds, -s is seed directory.
+# We use the stdlib of the cloned c3c repo as seed.
+"$FUZZ_BIN" -t "${FUZZ_TIME:-300}" -s ../c3c/lib/std -s crash -s segfault -s timeout
+
+CRASHES=$(ls crash 2>/dev/null | wc -l)
+SEGFAULTS=$(ls segfault 2>/dev/null | wc -l)
+TIMEOUTS=$(ls timeout 2>/dev/null | wc -l)
+
+log_info "Fuzzing Result -> Crashes: $CRASHES, Segfaults: $SEGFAULTS, Timeouts: $TIMEOUTS"
+
+popd > /dev/null
+
+if [ "$CRASHES" -gt 0 ] || [ "$SEGFAULTS" -gt 0 ]; then
+    log_error "Fuzzer found critical issues!"
+    exit 1
+fi
+
+exit 0

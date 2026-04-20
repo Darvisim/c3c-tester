@@ -38,7 +38,8 @@ jobs:
         name: Make scripts executable
         run: chmod +x scripts/*.sh || true
 
-      - name: Setup Dependencies
+      - &setup
+        name: Setup Dependencies
         run: ./scripts/setup.sh
 
       - &msvc
@@ -96,6 +97,7 @@ jobs:
     steps:
       - *checkout
       - *chmod
+      - *setup
       - *msvc
 
       - name: Restore Cached C3 Compiler Repo
