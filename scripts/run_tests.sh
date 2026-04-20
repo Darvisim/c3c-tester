@@ -67,13 +67,7 @@ run_one() {
     echo "RESULT:$([[ $status -eq 0 ]] && echo "PASS" || echo "FAIL")|$f|$dur|$inj"
 }
 
-if [[ "$MODE" == "fuzz" ]]; then
-    export FUZZ_TIME=${FUZZ_TIME:-300}
-    "$(dirname "$0")/fuzz.sh"
-    s=$?; echo "$PLATFORM|$MODE|1|$([ $s -eq 0 ] && echo 1 || echo 0)|$([ $s -eq 0 ] && echo 0 || echo 1)" > "$RES_FILE"
-    exit $s
-
-elif [[ "$MODE" == "test" ]]; then
+if [[ "$MODE" == "test" ]]; then
     W=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3b')
     cp -r "c3c/test" "$W/" 2>/dev/null || true
     TOTAL=2

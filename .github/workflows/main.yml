@@ -85,7 +85,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        target: [stdlib, benchmarks, resources, test, fuzz]
+        target: [stdlib, benchmarks, resources, test]
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40

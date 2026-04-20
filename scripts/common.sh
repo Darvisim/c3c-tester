@@ -29,10 +29,6 @@ check_deps() {
 
 get_c3c_path() {
     local bin="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
-    # Local stable download paths first
-    local stable="./c3/$bin"
-    if [[ -f "$stable" ]]; then echo "$(realpath "$stable")"; return; fi
-
     local base="./c3c/build/$bin"
     local paths=("$base" "./c3c/build/Release/$bin" "./c3c/build/Debug/$bin" "./c3c/build/bin/$bin")
     for p in "${paths[@]}"; do
