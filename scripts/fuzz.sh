@@ -10,7 +10,7 @@ FUZZ_DIR="c3fuzz"
 
 if [ ! -d "$FUZZ_DIR" ]; then
     log_info "Cloning c3fuzz..."
-    git clone --depth 1 "$FUZZ_REPO" "$FUZZ_DIR"
+    git clone --depth 1 --recurse-submodules "$FUZZ_REPO" "$FUZZ_DIR"
 fi
 
 pushd "$FUZZ_DIR" > /dev/null || exit 1
