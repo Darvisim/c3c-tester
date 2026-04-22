@@ -87,7 +87,14 @@ if [[ "$MODE" == "test" ]]; then
 else
     B="c3c/lib/std" && [[ "$MODE" == "benchmarks" ]] && B="c3c/benchmarks/stdlib"
     [[ "$MODE" == "resources" ]] && B="c3c/resources"
-    mapfile -t F < <(find "$B" -type f \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -not -path "*/.*" -print0 | xargs -0 echo)
+    F=()
+    if [ -d "$B" ]; then
+        while IFS= read -r -d '' file; do
+            F+=("$file")
+        done < <(find "$B" -type f \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -not -path "*/.*" -print0)
+    else
+        log_warn "Target directory '$B' not found."
+    fi
     TOTAL=${#F[@]}
     [[ "$TOTAL" -eq 0 ]] && { log_warn "No files found for $MODE"; echo "$PLATFORM|$MODE|0|0|0" > "$RES_FILE"; exit 0; }
     log_info "Running granular $MODE ($TOTAL files) on $JOBS jobs"
