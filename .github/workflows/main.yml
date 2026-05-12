@@ -40,8 +40,6 @@ jobs:
       - name: Make scripts executable
         run: chmod +x scripts/*.sh || true
 
-
-
       - name: Setup MSVC
         if: matrix.os == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
