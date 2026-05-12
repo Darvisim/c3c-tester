@@ -98,7 +98,7 @@ else
     TOTAL=${#F[@]}
     [[ "$TOTAL" -eq 0 ]] && { log_warn "No files found for $MODE"; echo "$PLATFORM|$MODE|0|0|0" > "$RES_FILE"; exit 0; }
     log_info "Running granular $MODE ($TOTAL files) on $JOBS jobs"
-    export -f run_one log_info log_success log_warn log_error get_bin_name is_main_missing
+    export -f run_one log_info log_success log_warn log_error get_bin_name
     export C3C BLUE GREEN YELLOW RED NC PLATFORM DUMMY
     BUFF="buf_${PLATFORM}_${MODE}.txt"
     printf "%s\n" "${F[@]}" | xargs -I{} -P "$JOBS" bash -c 'run_one "$@"' _ {} "$MODE" "$LOG_DIR" > "$BUFF"

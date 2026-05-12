@@ -20,12 +20,7 @@ case "$OS" in
     *)                     PLATFORM="Unknown" ;;
 esac
 
-check_deps() {
-    for cmd in "$@"; do
-        if ! command -v "$cmd" &>/dev/null; then return 1; fi
-    done
-    return 0
-}
+
 
 get_c3c_path() {
     if command -v c3c >/dev/null 2>&1; then
@@ -56,10 +51,4 @@ get_bin_name() {
     local n="${b%.*}"
     [[ "${PLATFORM:-}" == "Windows" ]] && n="${n}.exe"
     echo "$n"
-}
-
-is_main_missing() {
-    local f="${1:-}"
-    if [[ ! -f "$f" ]]; then return 0; fi
-    ! grep -Eq 'fn\s+(void|int|u?[0-9]+)?\s*main\s*\(' "$f"
 }
