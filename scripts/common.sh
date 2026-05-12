@@ -28,6 +28,10 @@ check_deps() {
 }
 
 get_c3c_path() {
+    if command -v c3c >/dev/null 2>&1; then
+        command -v c3c
+        return
+    fi
     local bin
     bin="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
     local base="./c3c/build/$bin"
