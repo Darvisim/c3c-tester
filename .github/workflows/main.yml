@@ -48,6 +48,8 @@ jobs:
 
       - name: Setup C3
         uses: jotrorox/setup-c3@v1
+        with:
+          version: latest
 
       - name: Checkout C3 Compiler
         uses: actions/checkout@v4
