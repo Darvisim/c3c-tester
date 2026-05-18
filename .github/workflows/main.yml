@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Make scripts executable
         run: chmod +x scripts/*.sh || true
@@ -52,7 +52,7 @@ jobs:
           version: latest
 
       - name: Checkout C3 Compiler
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: c3lang/c3c
           path: c3c
@@ -63,7 +63,7 @@ jobs:
         run: ./scripts/run_tests.sh ${{ matrix.target }}
 
       - name: Upload Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: results-${{ runner.os }}-${{ matrix.target }}
           path: results-*/test_results.txt
@@ -81,13 +81,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Make scripts executable
         run: chmod +x scripts/*.sh || true
 
       - name: Download all test results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: results
 
