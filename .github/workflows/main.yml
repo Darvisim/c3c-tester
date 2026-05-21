@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, ubuntu-22.04, ubuntu-slim, macos-26, macos-26-intel, macos-latest, macos-15-intel, macos-14, macos-14-large, windows-2025-vs2026, windows-latest, windows-2022]
         target: [stdlib, benchmarks, resources, test]
 
     runs-on: ${{ matrix.os }}
@@ -37,19 +37,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Make scripts executable
-        run: chmod +x scripts/*.sh || true
-
-      - name: Setup MSVC
-        if: matrix.os == 'windows-latest'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
       - name: Setup C3
         uses: jotrorox/setup-c3@v1
-        with:
-          version: latest
 
       - name: Checkout C3 Compiler
         uses: actions/checkout@v6
@@ -60,7 +49,7 @@ jobs:
       - name: Run Tests
         id: tests
         continue-on-error: true
-        run: ./scripts/run_tests.sh ${{ matrix.target }}
+        run: bash ./scripts/run_tests.sh ${{ matrix.target }}
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v7
@@ -75,16 +64,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
-    defaults:
-      run:
-        shell: bash
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Make scripts executable
-        run: chmod +x scripts/*.sh || true
 
       - name: Download all test results
         uses: actions/download-artifact@v8
@@ -92,4 +74,4 @@ jobs:
           path: results
 
       - name: Generate Summary
-        run: ./scripts/summary.sh
+        run: bash ./scripts/summary.sh
