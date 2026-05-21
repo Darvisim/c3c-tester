@@ -8,9 +8,9 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: main
   pull_request:
-    branches: [main]
+    branches: main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-22.04, ubuntu-slim, macos-26, macos-26-intel, macos-latest, macos-15-intel, macos-14, macos-14-large, windows-2025-vs2026, windows-latest, windows-2022]
+        os: [ubuntu-latest, ubuntu-22.04, ubuntu-slim, macos-26, macos-latest, macos-14, windows-2025-vs2026, windows-latest, windows-2022]
         target: [stdlib, benchmarks, resources, test]
 
     runs-on: ${{ matrix.os }}
