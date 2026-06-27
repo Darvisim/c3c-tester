@@ -19,12 +19,22 @@ concurrency:
 jobs:
 
   run-tests:
-    name: Test (${{ matrix.os }}, ${{ matrix.target }})
+    name: Test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-22.04, ubuntu-slim, macos-26, macos-latest, macos-14, windows-2025-vs2026, windows-latest, windows-2022]
-        target: [stdlib, benchmarks, resources, test]
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-22.04,
+            ubuntu-slim,
+            macos-26,
+            macos-latest,
+            macos-14,
+            windows-2025-vs2026,
+            windows-latest,
+            windows-2022,
+          ]
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
@@ -34,11 +44,10 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - name: Setup C3
-        uses: jotrorox/setup-c3@v1
+      - name: Install C3 Compiler
+        uses: ManuLinares/setup-c3@v1
 
       - name: Checkout C3 Compiler
         uses: actions/checkout@v6
@@ -49,13 +58,13 @@ jobs:
       - name: Run Tests
         id: tests
         continue-on-error: true
-        run: bash ./scripts/run_tests.sh ${{ matrix.target }}
+        run: bash ./scripts/run_tests.sh
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v7
         with:
-          name: results-${{ runner.os }}-${{ matrix.target }}
-          path: results-*/test_results.txt
+          name: results-${{ runner.os }}
+          path: results-*/
           retention-days: 1
 
   summary:
