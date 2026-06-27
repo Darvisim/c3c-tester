@@ -15,7 +15,13 @@ DUMMY="$(realpath "$RES_DIR" 2>/dev/null || echo "$RES_DIR")/_dummy.c3"
 echo "fn void main() => 0;" > "$DUMMY"
 export DUMMY
 
-PASSED=0; FAILED=0; COUNT=0; TOTAL=0; FAILS=()
+PASSED=0
+FAILED=0
+COUNT=0
+TOTAL=0
+
+FAILS=()
+
 STRICT="${STRICT_MODE:-false}"
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 C3C=$(get_c3c_path)
@@ -23,13 +29,19 @@ ensure_executable "$C3C"
 
 [[ ! -f "$C3C" ]] && { log_error "C3C missing"; echo "$PLATFORM|$MODE|0|0|0" > "$RES_FILE"; exit 0; }
 
-progress() {
-    local c=${1:-0}; local t=${2:-1}; local w=40
-    local p=$((c*100/(t>0?t:1))); local f="#"
-    local l=$((p*w/100))
-    local b
-    b=$(printf "%${l}s" | tr ' ' "$f")$(printf "%$((w-l))s")
-    [[ "${GITHUB_ACTIONS:-}" == "true" ]] && printf " [%s] [%3d%%] (%d/%d)\n" "$b" "$p" "$c" "$t" || printf "\r[%s] %3d%% (%d/%d)" "$b" "$p" "$c" "$t"
+print_result() {
+    local status="$1"
+    local name="$2"
+    local duration="$3"
+
+    ((COUNT++))
+
+    printf "[%4d/%4d] %-4s %s (%ss)\n" \
+        "$COUNT" \
+        "$TOTAL" \
+        "$status" \
+        "$name" \
+        "$duration"
 }
 
 run_test_bundle() {
@@ -46,10 +58,18 @@ run_test_bundle() {
     fi
     printf "%s\n" "$out"; echo "::endgroup::"
     dur=$(awk "BEGIN {printf \"%.3f\", ($(date +%s%N)-$start)/1000000000}")
-    ((COUNT++))
-    if [[ $status -eq 0 ]]; then ((PASSED++)); log_success "$n: Passed ($dur s)"
-    else ((FAILED++)); FAILS+=("$n"); log_error "$n: Failed ($dur s)"; fi
-    progress "$COUNT" "$TOTAL" && echo ""
+    
+    if [[ $status -eq 0 ]]; then
+        ((PASSED++))
+        print_result PASS "$n" "$dur"
+    else
+        ((FAILED++))
+        FAILS+=("$n")
+        print_result FAIL "$n" "$dur"
+    fi
+
+    DURATIONS+=("$dur")
+    TOTAL_TIME=$(awk "BEGIN {printf \"%.3f\", $TOTAL_TIME + $dur}")
 }
 
 # shellcheck disable=SC2329
@@ -147,23 +167,26 @@ run_compile_suite() {
         local file="${BASH_REMATCH[2]}"
         local duration="${BASH_REMATCH[3]}"
 
-        ((COUNT++))
-
-        echo "::group::$file ($duration s)"
-        cat "${LOG_DIR}/${file//[^[:alnum:]]/_}.log" 2>/dev/null
-        echo "::endgroup::"
-
         if [[ "$result" == PASS ]]; then
             ((PASSED++))
-            log_success "$file: Passed"
+            print_result PASS "$file" "$duration"
         else
             ((FAILED++))
             FAILS+=("$file")
-            log_error "$file: Failed"
+            print_result FAIL "$file" "$duration"
         fi
 
-        progress "$COUNT" "$TOTAL"
-        echo
+        if [[ "$result" == PASS ]]; then
+    ((PASSED++))
+    print_result PASS "$file" "$duration"
+else
+    ((FAILED++))
+    FAILS+=("$file")
+    print_result FAIL "$file" "$duration"
+fi
+
+DURATIONS+=("$duration")
+TOTAL_TIME=$(awk "BEGIN {printf \"%.3f\", $TOTAL_TIME + $duration}")
 
     done < "$buffer"
 
