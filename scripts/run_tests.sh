@@ -159,7 +159,11 @@ run_compile_suite() {
 
     COUNT=0
 
-    mapfile -t FILES < <(collect_files "$directory")
+    FILES=()
+
+    while IFS= read -r file; do
+        FILES+=("$file")
+    done < <(collect_files "$directory")
 
     SUITE_TOTAL=${#FILES[@]}
     TOTAL=$((TOTAL + SUITE_TOTAL))
