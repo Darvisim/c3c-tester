@@ -86,7 +86,7 @@ compile_file() {
 
     if output=$(
         cd "$temp_dir" &&
-        "$C3C" -q --no-entry "$command" \
+        "$C3C" "$command" -q --no-entry \
             -o "$binary_name" \
             "$abs_file" 2>&1
     ); then
@@ -217,7 +217,7 @@ run_test_suite() {
     if [[ -d "$workspace/test/unit" ]]; then
         run_test_bundle \
             "Unit" \
-            "\$C3C -q --no-entry compile-test unit -O1" \
+            "\$C3C compile-test unit -O1 -q --no-entry" \
             "$workspace/test"
     fi
 
