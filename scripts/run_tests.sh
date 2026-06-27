@@ -268,7 +268,7 @@ write_results() {
     done
 }
 
-trap 'rm -rf "$LOG_DIR"' EXIT
+# trap 'rm -rf "$LOG_DIR"' EXIT
 
 run_compile_suite \
     "Standard Library" \
