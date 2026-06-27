@@ -25,7 +25,13 @@ while IFS= read -r f; do
     done < <(tail -n +2 "$f")
 done < <(find results -name "test_results.txt" 2>/dev/null)
 
-mapfile -t OSS < <(printf "%s\n" "${OSS[@]}" | sort)
+sorted=()
+
+while IFS= read -r os; do
+    sorted+=("$os")
+done < <(printf "%s\n" "${OSS[@]}" | sort)
+
+OSS=("${sorted[@]}")
 
 {
     echo
