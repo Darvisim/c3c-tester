@@ -19,7 +19,8 @@ TOTAL_TIME=0
 declare -a FAILS=()
 
 STRICT="${STRICT_MODE:-false}"
-JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+CPU=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+JOBS=$(( CPU > 2 ? 2 : CPU ))
 
 C3C=$(get_c3c_path)
 ensure_executable "$C3C"
@@ -84,20 +85,28 @@ compile_file() {
         (cd "$temp_dir" && "$C3C" init >/dev/null 2>&1)
     fi
 
+    local -a args=("$command" -q)
+
+    case "$command" in
+        compile-only)
+            args+=(--no-entry)
+            ;;
+        compile-benchmark)
+            args+=(--suppress-run)
+            ;;
+        *)
+            ;;
+    esac
+    
     if output=$(
         cd "$temp_dir" &&
-        "$C3C" "$command" -q --no-entry \
-            -o "$binary_name" \
-            "$abs_file" 2>&1
+        "$C3C" "${args[@]}" 2>&1
     ); then
         status=0
     else
         status=$?
     fi
-
-    if [[ $status -ne 0 ]]; then
-        echo "$output"
-    fi
+    
     rm -rf "$temp_dir"
 
     duration=$(awk "BEGIN {printf \"%.3f\", ($(date +%s%N)-$start_time)/1000000000}")
@@ -122,7 +131,7 @@ run_compile_suite() {
     done < <(collect_files "$directory")
 
     SUITE_TOTAL=${#FILES[@]}
-    TOTAL=$((TOTAL + SUITE_TOTAL))
+    $((TOTAL + SUITE_TOTAL))
 
     if (( SUITE_TOTAL == 0 )); then
         log_warn "No files found for $name"
@@ -215,12 +224,12 @@ run_test_suite() {
 
     COUNT=0
     SUITE_TOTAL=2
-    TOTAL=$((TOTAL + SUITE_TOTAL))
+    $((TOTAL + SUITE_TOTAL))
 
     if [[ -d "$workspace/test/unit" ]]; then
         run_test_bundle \
             "Unit" \
-            "\$C3C compile-test unit -O1 -q --no-entry" \
+            "\$C3C compile-test unit -O1" \
             "$workspace/test"
     fi
 
@@ -268,12 +277,12 @@ write_results() {
     done
 }
 
-# trap 'rm -rf "$LOG_DIR"' EXIT
+trap 'rm -rf "$LOG_DIR"' EXIT
 
 run_compile_suite \
     "Standard Library" \
     "c3c/lib/std" \
-    "compile" \
+    "compile-only" \
     false
 
 run_compile_suite \
@@ -285,7 +294,7 @@ run_compile_suite \
 run_compile_suite \
     "Resources" \
     "c3c/resources" \
-    "compile" \
+    "compile-only" \
     true
 
 run_test_suite
