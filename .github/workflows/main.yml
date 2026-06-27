@@ -48,6 +48,8 @@ jobs:
 
       - name: Install C3 Compiler
         uses: ManuLinares/setup-c3@v1
+        with:
+          version: nightly
 
       - name: Checkout C3 Compiler
         uses: actions/checkout@v6
