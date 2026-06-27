@@ -32,7 +32,7 @@ progress() {
     [[ "${GITHUB_ACTIONS:-}" == "true" ]] && printf " [%s] [%3d%%] (%d/%d)\n" "$b" "$p" "$c" "$t" || printf "\r[%s] %3d%% (%d/%d)" "$b" "$p" "$c" "$t"
 }
 
-run_bundle() {
+run_test_bundle() {
     local n="$1" cmd="$2" d="${3:-.}" status=0 out=""
     local start
     start=$(date +%s%N)
@@ -53,7 +53,7 @@ run_bundle() {
 }
 
 # shellcheck disable=SC2329
-run_one() {
+compile_file() {
     local f=$1 m=$2 ld=$3 status=0 out="" inj=0
     local start af ad jd bin
     start=$(date +%s%N)
@@ -76,46 +76,141 @@ run_one() {
     echo "RESULT:$([[ $status -eq 0 ]] && echo "PASS" || echo "FAIL")|$f|$dur|$inj"
 }
 
-if [[ "$MODE" == "test" ]]; then
-    W=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3b')
-    cp -r "c3c/test" "$W/" 2>/dev/null || true
-    TOTAL=2
-    [ -d "$W/test/unit" ] && run_bundle "Unit" "\$C3C compile-test unit -O1" "$W/test"
-    [ -f "$W/test/src/test_suite_runner.c3" ] && run_bundle "Suite" "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" "$W/test"
-    rm -rf "$W"
+get_target_directory() {
+    case "$1" in
+        stdlib)
+            echo "c3c/lib/std"
+            ;;
+        benchmarks)
+            echo "c3c/benchmarks/stdlib"
+            ;;
+        resources)
+            echo "c3c/resources"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
 
-else
-    B="c3c/lib/std" && [[ "$MODE" == "benchmarks" ]] && B="c3c/benchmarks/stdlib"
-    [[ "$MODE" == "resources" ]] && B="c3c/resources"
-    F=()
-    if [ -d "$B" ]; then
-        while IFS= read -r -d '' file; do
-            F+=("$file")
-        done < <(find "$B" -type f \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) -not -path "*/.*" -print0)
-    else
-        log_warn "Target directory '$B' not found."
+collect_files() {
+    local base
+    base=$(get_target_directory "$1") || return 1
+
+    if [[ ! -d "$base" ]]; then
+        log_warn "Target directory '$base' not found."
+        return 1
     fi
-    TOTAL=${#F[@]}
-    [[ "$TOTAL" -eq 0 ]] && { log_warn "No files found for $MODE"; echo "$PLATFORM|$MODE|0|0|0" > "$RES_FILE"; exit 0; }
-    log_info "Running granular $MODE ($TOTAL files) on $JOBS jobs"
-    export -f run_one log_info log_success log_warn log_error get_bin_name
-    export C3C BLUE GREEN YELLOW RED NC PLATFORM DUMMY
-    BUFF="buf_${PLATFORM}_${MODE}.txt"
-    printf "%s\n" "${F[@]}" | xargs -I{} -P "$JOBS" bash -c 'run_one "$@"' _ {} "$MODE" "$LOG_DIR" > "$BUFF"
-    while read -r l; do
-        [[ "$l" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]] || continue
-        res=${BASH_REMATCH[1]}; f=${BASH_REMATCH[2]}; d=${BASH_REMATCH[3]}
-        ((COUNT++)); echo "::group::$f ($d s)"
-        cat "${LOG_DIR}/${f//[^[:alnum:]]/_}.log" 2>/dev/null; echo "::endgroup::"
-        if [[ "$res" == "PASS" ]]; then ((PASSED++)); log_success "$f: Passed"
-        else ((FAILED++)); FAILS+=("$f"); log_error "$f: Failed"; fi
-        progress "$COUNT" "$TOTAL" && echo ""
-    done < "$BUFF"; rm -f "$BUFF"
-fi
 
-rm -f "$DUMMY"; rm -rf "$LOG_DIR"
-echo -e "\nComplete. $TOTAL total, $PASSED passed, $FAILED failed."
-echo "$PLATFORM|$MODE|$TOTAL|$PASSED|$FAILED" > "$RES_FILE"
-for f in ${FAILS[@]+"${FAILS[@]}"}; do echo "$f" >> "$RES_FILE"; done
-[[ "$STRICT" == "true" && $FAILED -gt 0 ]] && exit 1
-exit 0
+    find "$base" \
+        -type f \
+        \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) \
+        -not -path "*/.*"
+}
+
+run_compile_suite() {
+    local mode="$1"
+
+    local base
+    base=$(get_target_directory "$mode") || {
+        log_error "Unknown mode '$mode'"
+        exit 1
+    }
+
+    mapfile -t FILES < <(collect_files "$mode")
+
+    TOTAL=${#FILES[@]}
+
+    if [[ "$TOTAL" -eq 0 ]]; then
+        log_warn "No files found for $mode"
+        echo "$PLATFORM|$mode|0|0|0" > "$RES_FILE"
+        return
+    fi
+
+    log_info "Running granular $mode ($TOTAL files) on $JOBS jobs"
+
+    export -f compile_file log_info log_success log_warn log_error get_bin_name
+    export C3C BLUE GREEN YELLOW RED NC PLATFORM DUMMY
+
+    local buffer="buf_${PLATFORM}_${mode}.txt"
+
+    printf "%s\n" "${FILES[@]}" |
+        xargs -I{} -P "$JOBS" \
+        bash -c 'compile_file "$@"' _ {} "$mode" "$LOG_DIR" \
+        > "$buffer"
+
+    while read -r line; do
+
+        [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*) ]] || continue
+
+        local result="${BASH_REMATCH[1]}"
+        local file="${BASH_REMATCH[2]}"
+        local duration="${BASH_REMATCH[3]}"
+
+        ((COUNT++))
+
+        echo "::group::$file ($duration s)"
+        cat "${LOG_DIR}/${file//[^[:alnum:]]/_}.log" 2>/dev/null
+        echo "::endgroup::"
+
+        if [[ "$result" == PASS ]]; then
+            ((PASSED++))
+            log_success "$file: Passed"
+        else
+            ((FAILED++))
+            FAILS+=("$file")
+            log_error "$file: Failed"
+        fi
+
+        progress "$COUNT" "$TOTAL"
+        echo
+
+    done < "$buffer"
+
+    rm -f "$buffer"
+}
+
+run_test_suite() {
+
+    local workspace
+
+    workspace=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3b')
+
+    cp -r "c3c/test" "$workspace/" 2>/dev/null || true
+
+    TOTAL=2
+
+    if [[ -d "$workspace/test/unit" ]]; then
+        run_test_bundle \
+            "Unit" \
+            "\$C3C compile-test unit -O1" \
+            "$workspace/test"
+    fi
+
+    if [[ -f "$workspace/test/src/test_suite_runner.c3" ]]; then
+        run_test_bundle \
+            "Suite" \
+            "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" \
+            "$workspace/test"
+    fi
+
+    rm -rf "$workspace"
+}
+
+case "$MODE" in
+    test)
+        run_test_suite
+        ;;
+
+    stdlib)
+        run_compile_suite stdlib
+        ;;
+
+    benchmarks)
+        run_compile_suite benchmarks
+        ;;
+
+    resources)
+        run_compile_suite resources
+        ;;
+esac
