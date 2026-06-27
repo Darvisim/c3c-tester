@@ -4,27 +4,31 @@ source "$(dirname "$0")/common.sh"
 set +e +o pipefail
 
 RES_DIR="results-${PLATFORM}"
-mkdir -p "$RES_DIR"
-
 RES_FILE="$RES_DIR/test_results.txt"
 LOG_DIR="test_logs_${PLATFORM}"
-mkdir -p "$LOG_DIR"
+
+mkdir -p "$RES_DIR" "$LOG_DIR"
 
 PASSED=0
 FAILED=0
 COUNT=0
 TOTAL=0
 SUITE_TOTAL=0
+TOTAL_TIME=0
 
 declare -a FAILS=()
-TOTAL_TIME=0
 
 STRICT="${STRICT_MODE:-false}"
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+
 C3C=$(get_c3c_path)
 ensure_executable "$C3C"
 
-[[ ! -f "$C3C" ]] && { log_error "C3C missing"; echo "$PLATFORM|0|0|0" > "$RES_FILE"; exit 0; }
+if [[ ! -f "$C3C" ]]; then
+    log_error "C3C missing"
+    echo "$PLATFORM|0|0|0" > "$RES_FILE"
+    exit 0
+fi
 
 print_result() {
     local status="$1"
@@ -41,61 +45,20 @@ print_result() {
         "$duration"
 }
 
-create_dummy_main() {
-    DUMMY_FILE="${RES_DIR}/_dummy.c3"
-    printf "fn void main() => 0;\n" > "$DUMMY_FILE"
-    export DUMMY_FILE
-}
+collect_files() {
+    local directory="$1"
 
-cleanup() {
-    rm -f "$DUMMY_FILE"
-    rm -rf "$LOG_DIR"
-}
-
-run_test_bundle() {
-    local name="$1"
-    local command="$2"
-    local working_dir="${3:-.}"
-
-    local status=0
-    local output=""
-    local start_time
-    local duration
-
-    start_time=$(date +%s%N)
-
-    echo "::group::$name"
-
-    local quoted_c3
-    quoted_c3=$(printf '%q' "$C3C")
-
-    local resolved_command="${command//\$C3C/$quoted_c3}"
-
-    output=$(cd "$working_dir" && eval "$resolved_command" 2>&1) || status=$?
-
-    if [[ $status -ne 0 && "$output" == *"The 'main' function"* ]]; then
-        status=0
-        output=$(cd "$working_dir" && eval "$resolved_command $DUMMY_FILE" 2>&1) || status=$?
+    if [[ ! -d "$directory" ]]; then
+        log_warn "Target directory '$directory' not found."
+        return 1
     fi
 
-    printf "%s\n" "$output"
-    echo "::endgroup::"
-
-    duration=$(awk "BEGIN {printf \"%.3f\", ($(date +%s%N)-$start_time)/1000000000}")
-
-    if [[ $status -eq 0 ]]; then
-        ((PASSED++))
-        print_result PASS "$name" "$duration"
-    else
-        ((FAILED++))
-        FAILS+=("$name")
-        print_result FAIL "$name" "$duration"
-    fi
-
-    TOTAL_TIME=$(awk "BEGIN {printf \"%.3f\", $TOTAL_TIME + $duration}")
+    find "$directory" \
+        -type f \
+        \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) \
+        -not -path "*/.*"
 }
 
-# shellcheck disable=SC2329
 compile_file() {
     local file="$1"
     local command="$2"
@@ -121,8 +84,12 @@ compile_file() {
         (cd "$temp_dir" && "$C3C" init >/dev/null 2>&1)
     fi
 
-    if output=$(cd "$temp_dir" && \
-        "$C3C" "$command" -o "$binary_name" "$abs_file" 2>&1); then
+    if output=$(
+        cd "$temp_dir" &&
+        "$C3C" -q --no-entry "$command" \
+            -o "$binary_name" \
+            "$abs_file" 2>&1
+    ); then
         status=0
     else
         status=$?
@@ -137,20 +104,6 @@ compile_file() {
     echo "RESULT:$([[ $status -eq 0 ]] && echo PASS || echo FAIL)|$file|$duration"
 }
 
-collect_files() {
-    local directory="$1"
-
-    if [[ ! -d "$directory" ]]; then
-        log_warn "Target directory '$directory' not found."
-        return 1
-    fi
-
-    find "$directory" \
-        -type f \
-        \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) \
-        -not -path "*/.*"
-}
-
 run_compile_suite() {
     local name="$1"
     local directory="$2"
@@ -159,7 +112,7 @@ run_compile_suite() {
 
     COUNT=0
 
-    FILES=()
+    local -a FILES=()
 
     while IFS= read -r file; do
         FILES+=("$file")
@@ -176,7 +129,7 @@ run_compile_suite() {
     log_info "Running $name ($SUITE_TOTAL files) on $JOBS jobs"
 
     export -f compile_file get_bin_name
-    export C3C DUMMY_FILE
+    export C3C
 
     local buffer
     buffer=$(mktemp)
@@ -187,7 +140,7 @@ run_compile_suite() {
         _ {} "$command" "$init_project" "$LOG_DIR" \
         > "$buffer"
 
-    while read -r line; do
+    while IFS= read -r line; do
 
         [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)$ ]] || continue
     
@@ -211,6 +164,44 @@ run_compile_suite() {
     rm -f "$buffer"
 }
 
+run_test_bundle() {
+    local name="$1"
+    local command="$2"
+    local working_dir="${3:-.}"
+
+    local status=0
+    local output=""
+    local start_time
+    local duration
+
+    start_time=$(date +%s%N)
+
+    echo "::group::$name"
+
+    local quoted_c3
+    quoted_c3=$(printf '%q' "$C3C")
+
+    local resolved_command="${command//\$C3C/$quoted_c3}"
+
+    output=$(cd "$working_dir" && eval "$resolved_command" 2>&1) || status=$?
+
+    printf "%s\n" "$output"
+    echo "::endgroup::"
+
+    duration=$(awk "BEGIN {printf \"%.3f\", ($(date +%s%N)-$start_time)/1000000000}")
+
+    if [[ $status -eq 0 ]]; then
+        ((PASSED++))
+        print_result PASS "$name" "$duration"
+    else
+        ((FAILED++))
+        FAILS+=("$name")
+        print_result FAIL "$name" "$duration"
+    fi
+
+    TOTAL_TIME=$(awk "BEGIN {printf \"%.3f\", $TOTAL_TIME + $duration}")
+}
+
 run_test_suite() {
 
     local workspace
@@ -226,7 +217,7 @@ run_test_suite() {
     if [[ -d "$workspace/test/unit" ]]; then
         run_test_bundle \
             "Unit" \
-            "\$C3C compile-test unit -O1" \
+            "\$C3C -q --no-entry compile-test unit -O1" \
             "$workspace/test"
     fi
 
@@ -274,8 +265,7 @@ write_results() {
     done
 }
 
-create_dummy_main
-trap cleanup EXIT
+trap 'rm -rf "$LOG_DIR"' EXIT
 
 run_compile_suite \
     "Standard Library" \
