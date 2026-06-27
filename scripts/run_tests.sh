@@ -95,6 +95,9 @@ compile_file() {
         status=$?
     fi
 
+    if [[ $status -ne 0 ]]; then
+        echo "$output"
+    fi
     rm -rf "$temp_dir"
 
     duration=$(awk "BEGIN {printf \"%.3f\", ($(date +%s%N)-$start_time)/1000000000}")
