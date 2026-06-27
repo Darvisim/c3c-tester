@@ -97,6 +97,8 @@ compile_file() {
         *)
             ;;
     esac
+
+    args+=("$abs_file")
     
     if output=$(
         cd "$temp_dir" &&
@@ -131,7 +133,7 @@ run_compile_suite() {
     done < <(collect_files "$directory")
 
     SUITE_TOTAL=${#FILES[@]}
-    $((TOTAL + SUITE_TOTAL))
+    TOTAL=$((TOTAL + SUITE_TOTAL))
 
     if (( SUITE_TOTAL == 0 )); then
         log_warn "No files found for $name"
@@ -224,7 +226,7 @@ run_test_suite() {
 
     COUNT=0
     SUITE_TOTAL=2
-    $((TOTAL + SUITE_TOTAL))
+    TOTAL=$((TOTAL + SUITE_TOTAL))
 
     if [[ -d "$workspace/test/unit" ]]; then
         run_test_bundle \
