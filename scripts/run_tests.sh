@@ -195,6 +195,10 @@ run_test_bundle() {
     local quoted_c3
     quoted_c3=$(printf '%q' "$C3C")
 
+    echo "C3C=$C3C"
+    printf 'quoted=%q\n' "$C3C"
+    cygpath -w "$C3C" 2>/dev/null || true
+    
     local resolved_command="${command//\$C3C/$quoted_c3}"
 
     output=$(cd "$working_dir" && eval "$resolved_command" 2>&1) || status=$?
