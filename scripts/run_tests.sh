@@ -272,8 +272,8 @@ print_summary() {
 }
 
 write_results() {
-    echo "$PLATFORM|$TOTAL|$PASSED|$FAILED" > "$RES_FILE"
-    
+    echo "$PLATFORM|$ARCH|$TOTAL|$PASSED|$FAILED" > "$RES_FILE"
+
     for f in "${FAILS[@]}"; do
         echo "$f" >> "$RES_FILE"
     done
