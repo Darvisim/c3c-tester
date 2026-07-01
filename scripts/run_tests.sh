@@ -3,9 +3,9 @@
 source "$(dirname "$0")/common.sh"
 set +e +o pipefail
 
-RES_DIR="results-${PLATFORM}"
+RES_DIR="results-${PLATFORM}-${ARCH}"
 RES_FILE="$RES_DIR/test_results.txt"
-LOG_DIR="test_logs_${PLATFORM}"
+LOG_DIR="test_logs_${PLATFORM}-${ARCH}"
 
 mkdir -p "$RES_DIR" "$LOG_DIR"
 
