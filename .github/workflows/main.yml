@@ -55,6 +55,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - if: runner.os  == 'Windows'
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: ${{ matrix.arch }}
+
       # - name: Install C3 Compiler
       #   uses: ManuLinares/setup-c3@v1
       #   with:
