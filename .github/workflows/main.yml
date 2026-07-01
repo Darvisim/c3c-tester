@@ -19,30 +19,39 @@ concurrency:
 jobs:
 
   run-tests:
-    name: Test (${{ matrix.os }})
+    name: Test (${{ matrix.platform }} ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-22.04,
-            ubuntu-slim,
-            macos-26,
-            macos-latest,
-            macos-14,
-            windows-2025-vs2026,
-            windows-latest,
-            windows-2022,
-          ]
-
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
-
+        include:
+          - platform: Linux
+            os: ubuntu-latest
+            arch: x64
+      
+          - platform: Linux
+            os: ubuntu-24.04-arm
+            arch: arm64
+      
+          - platform: macOS
+            os: macos-26-intel
+            arch: x64
+      
+          - platform: macOS
+            os: macos-latest
+            arch: arm64
+      
+          - platform: Windows
+            os: windows-latest
+            arch: x64
+      
+          - platform: Windows
+            os: windows-11-arm
+            arch: arm64
     defaults:
       run:
         shell: bash
-
     steps:
       - uses: actions/checkout@v7
 
@@ -65,7 +74,7 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v7
         with:
-          name: results-${{ runner.os }}
+          name: results-${{ runner.os }}-${{ matrix.arch }}
           path: results-*/
           retention-days: 1
 
