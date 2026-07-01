@@ -19,62 +19,31 @@ concurrency:
 jobs:
 
   run-tests:
-    name: Test (${{ matrix.platform }} ${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    name: Test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: Linux
-            os: ubuntu-24.04
-            arch: x64
-      
-          - platform: Linux
-            os: ubuntu-24.04-arm
-            arch: arm64
-      
-          - platform: macOS
-            os: macos-26-intel
-            arch: x64
-      
-          - platform: macOS
-            os: macos-26
-            arch: arm64
-      
-          - platform: Windows
-            os: windows-2025
-            arch: x64
-      
-          - platform: Windows
-            os: windows-11-arm
-            arch: arm64
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+
     defaults:
       run:
         shell: bash
+
     steps:
       - uses: actions/checkout@v7
 
-      - if: runner.os  == 'Windows'
-        uses: TheMrMilchmann/setup-msvc-dev@v4
+      - name: Install C3 Compiler
+        uses: ManuLinares/setup-c3@v1
         with:
-          arch: ${{ matrix.arch }}
-
-      # - name: Install C3 Compiler
-      #   uses: ManuLinares/setup-c3@v1
-      #   with:
-      #     version: nightly
+          version: nightly
 
       - name: Checkout C3 Compiler
         uses: actions/checkout@v6
         with:
           repository: c3lang/c3c
           path: c3c
-
-      - name: Build C3 Compiler
-        run: |
-          cmake -S c3c -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DC3_FETCH_LLVM=ON
-          cmake --build build --parallel
 
       - name: Run Tests
         id: tests
@@ -84,7 +53,7 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v7
         with:
-          name: results-${{ runner.os }}-${{ matrix.arch }}
+          name: results-${{ runner.os }}
           path: results-*/
           retention-days: 1
 
