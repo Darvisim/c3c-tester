@@ -3,9 +3,9 @@
 source "$(dirname "$0")/common.sh"
 set +e +o pipefail
 
-RES_DIR="results-${PLATFORM}-${ARCH}"
+RES_DIR="results-${PLATFORM}"
 RES_FILE="$RES_DIR/test_results.txt"
-LOG_DIR="test_logs_${PLATFORM}-${ARCH}"
+LOG_DIR="test_logs_${PLATFORM}"
 
 mkdir -p "$RES_DIR" "$LOG_DIR"
 
@@ -272,7 +272,7 @@ print_summary() {
 }
 
 write_results() {
-    echo "$PLATFORM|$ARCH|$TOTAL|$PASSED|$FAILED" > "$RES_FILE"
+    echo "$PLATFORM|$TOTAL|$PASSED|$FAILED" > "$RES_FILE"
 
     for f in "${FAILS[@]}"; do
         echo "$f" >> "$RES_FILE"
