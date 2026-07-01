@@ -37,19 +37,14 @@ get_c3c_path() {
         return
     fi
 
+    local default_path="./c3c/build/$bin"
     local paths=(
-        "./build/$bin"
-        "./build/bin/$bin"
-        "./build/Debug/$bin"
-        "./build/Release/$bin"
-
-        "./c3c/build/$bin"
-        "./c3c/build/bin/$bin"
-        "./c3c/build/Debug/$bin"
+        "$default_path"
         "./c3c/build/Release/$bin"
+        "./c3c/build/Debug/$bin"
+        "./c3c/build/bin/$bin"
     )
-
-    local p
+    
     for p in "${paths[@]}"; do
         [[ -f "$p" ]] && {
             realpath "$p"
@@ -57,9 +52,8 @@ get_c3c_path() {
         }
     done
 
-    local found
-    found=$(
-        find ./build ./c3c/build \
+    local found=$(
+        find ./c3c/build \
             -type f \
             -name "$bin" 2>/dev/null |
         head -n1
@@ -70,7 +64,7 @@ get_c3c_path() {
         return
     fi
 
-    echo "./build/$bin"
+    realpath "$default_path" 2>/dev/null || echo "$default_path"
 }
 
 ensure_executable() {
