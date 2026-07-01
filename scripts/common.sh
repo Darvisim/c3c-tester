@@ -21,13 +21,15 @@ case "$OS" in
 esac
 
 get_c3c_path() {
-    if command -v c3c >/dev/null 2>&1; then
-        command -v c3c
+    local cmd="c3c"
+    [[ "$PLATFORM" == "Windows" ]] && cmd+=".exe"
+
+    if command -v "$cmd" >/dev/null 2>&1; then
+        realpath "$(command -v "$cmd")"
         return
     fi
     
     local bin="c3c"
-
     [[ "$PLATFORM" == "Windows" ]] && bin+=".exe"
     
     local default_path="./c3c/build/$bin"
@@ -37,14 +39,17 @@ get_c3c_path() {
         "./c3c/build/Debug/$bin"
         "./c3c/build/bin/$bin"
     )
+    
     for p in "${paths[@]}"; do
         [[ -f "$p" ]] && {
             realpath "$p"
             return
         }
     done
+    
     local found
     found=$(find ./c3c/build -name "$bin" -type f 2>/dev/null | head -n 1)
+    
     if [[ -n "$found" ]]; then realpath "$found"; return; fi
     realpath "$default_path" 2>/dev/null || echo "$default_path"
 }
