@@ -55,16 +55,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install C3 Compiler
-        uses: ManuLinares/setup-c3@v1
-        with:
-          version: nightly
+      # - name: Install C3 Compiler
+      #   uses: ManuLinares/setup-c3@v1
+      #   with:
+      #     version: nightly
 
       - name: Checkout C3 Compiler
         uses: actions/checkout@v6
         with:
           repository: c3lang/c3c
           path: c3c
+
+      - name: Build C3 Compiler
+        run: |
+          cmake -S c3c -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DC3_FETCH_LLVM=ON
+          cmake --build build -j
 
       - name: Run Tests
         id: tests
