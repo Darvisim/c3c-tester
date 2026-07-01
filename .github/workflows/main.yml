@@ -69,7 +69,7 @@ jobs:
       - name: Build C3 Compiler
         run: |
           cmake -S c3c -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DC3_FETCH_LLVM=ON
-          cmake --build build -j
+          cmake --build build --parallel
 
       - name: Run Tests
         id: tests
