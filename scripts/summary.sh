@@ -19,40 +19,38 @@ while IFS= read -r f; do
 
     read -r header < "$f"
 
-    IFS="|" read -r OS ARCH TOT PAS FAL <<< "$header"
-    [[ -n "$OS" && -n "$ARCH" ]] || continue
+    IFS="|" read -r OS TOT PAS FAL <<< "$header"
+    [[ -n "$OS" ]] || continue
 
-    key="$OS|$ARCH"
-    DATA["$key"]="$PAS/$TOT"
+    DATA["$OS"]="$PAS/$TOT"
 
-    if [[ ! " ${TARGETS[*]} " =~ " ${key} " ]]; then
-        TARGETS+=("$key")
+    if [[ ! " ${TARGETS[*]} " =~ " ${OS} " ]]; then
+        TARGETS+=("$OS")
     fi
 
     ((T_SUM += TOT, P_SUM += PAS, F_SUM += FAL))
 
     while IFS= read -r fail; do
-        [[ -n "$fail" ]] && FAILS+=("[$OS/$ARCH] $fail")
+        [[ -n "$fail" ]] && FAILS+=("[$OS] $fail")
     done < <(tail -n +2 "$f")
 
 done < <(find results -name "test_results.txt" 2>/dev/null)
 
-IFS=$'\n' TARGETS=($(sort <<<"${TARGETS[*]}"))
+IFS=$'\n'
+TARGETS=($(printf "%s\n" "${TARGETS[@]}" | sort))
 unset IFS
 
 {
     echo
-    echo "| Platform | Arch | Result |"
-    echo "| :------- | :--: | :----: |"
+    echo "| Platform | Result |"
+    echo "| :------- | :----: |"
 } >> "$GITHUB_STEP_SUMMARY"
 
-for target in "${TARGETS[@]}"; do
-    IFS="|" read -r os arch <<< "$target"
-
-    value="${DATA[$target]:-N/A}"
+for os in "${TARGETS[@]}"; do
+    value="${DATA[$os]:-N/A}"
 
     if [[ "$value" == "N/A" ]]; then
-        echo "| **$os** | **$arch** | - |" >> "$GITHUB_STEP_SUMMARY"
+        echo "| **$os** | - |" >> "$GITHUB_STEP_SUMMARY"
         continue
     fi
 
@@ -66,7 +64,7 @@ for target in "${TARGETS[@]}"; do
 
     badge="${value//\//%2F}"
 
-    echo "| **$os** | **$arch** | ![$value](https://img.shields.io/badge/-${badge}-${color}?style=flat-square) |" \
+    echo "| **$os** | ![$value](https://img.shields.io/badge/-${badge}-${color}?style=flat-square) |" \
         >> "$GITHUB_STEP_SUMMARY"
 done
 
