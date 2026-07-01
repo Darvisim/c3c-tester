@@ -29,37 +29,48 @@ case "$ARCH" in
 esac
 
 get_c3c_path() {
-    local cmd="c3c"
-    [[ "$PLATFORM" == "Windows" ]] && cmd+=".exe"
-
-    if command -v "$cmd" >/dev/null 2>&1; then
-        realpath "$(command -v "$cmd")"
-        return
-    fi
-    
     local bin="c3c"
     [[ "$PLATFORM" == "Windows" ]] && bin+=".exe"
-    
-    local default_path="./c3c/build/$bin"
+
+    if command -v "$bin" >/dev/null 2>&1; then
+        realpath "$(command -v "$bin")"
+        return
+    fi
+
     local paths=(
-        "$default_path"
-        "./c3c/build/Release/$bin"
-        "./c3c/build/Debug/$bin"
+        "./build/$bin"
+        "./build/bin/$bin"
+        "./build/Debug/$bin"
+        "./build/Release/$bin"
+
+        "./c3c/build/$bin"
         "./c3c/build/bin/$bin"
+        "./c3c/build/Debug/$bin"
+        "./c3c/build/Release/$bin"
     )
-    
+
+    local p
     for p in "${paths[@]}"; do
         [[ -f "$p" ]] && {
             realpath "$p"
             return
         }
     done
-    
+
     local found
-    found=$(find ./c3c/build -name "$bin" -type f 2>/dev/null | head -n 1)
-    
-    if [[ -n "$found" ]]; then realpath "$found"; return; fi
-    realpath "$default_path" 2>/dev/null || echo "$default_path"
+    found=$(
+        find ./build ./c3c/build \
+            -type f \
+            -name "$bin" 2>/dev/null |
+        head -n1
+    )
+
+    if [[ -n "$found" ]]; then
+        realpath "$found"
+        return
+    fi
+
+    echo "./build/$bin"
 }
 
 ensure_executable() {
