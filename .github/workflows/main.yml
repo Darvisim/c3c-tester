@@ -27,7 +27,7 @@ jobs:
       matrix:
         include:
           - platform: Linux
-            os: ubuntu-latest
+            os: ubuntu-24.04
             arch: x64
       
           - platform: Linux
@@ -39,11 +39,11 @@ jobs:
             arch: x64
       
           - platform: macOS
-            os: macos-latest
+            os: macos-26
             arch: arm64
       
           - platform: Windows
-            os: windows-latest
+            os: windows-2025
             arch: x64
       
           - platform: Windows
