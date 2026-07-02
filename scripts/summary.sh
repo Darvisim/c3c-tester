@@ -10,7 +10,11 @@ T_SUM=0
 P_SUM=0
 F_SUM=0
 
-declare -A DATA
+declare -A TOTALS
+declare -A PASSEDS
+declare -A FAILEDS
+declare -A TIMES
+declare -A AVERAGES
 declare -a FAILS=()
 declare -a TARGETS=()
 
@@ -19,10 +23,14 @@ while IFS= read -r f; do
 
     read -r header < "$f"
 
-    IFS="|" read -r OS TOT PAS FAL <<< "$header"
+    IFS="|" read -r OS TOT PAS FAL TIME AVG <<< "$header"
     [[ -n "$OS" ]] || continue
 
-    DATA["$OS"]="$PAS/$TOT"
+    TOTALS["$OS"]="$TOT"
+    PASSEDS["$OS"]="$PAS"
+    FAILEDS["$OS"]="$FAL"
+    TIMES["$OS"]="$TIME"
+    AVERAGES["$OS"]="$AVG"
 
     if [[ ! " ${TARGETS[*]} " =~ " ${OS} " ]]; then
         TARGETS+=("$OS")
@@ -40,38 +48,46 @@ IFS=$'\n'
 TARGETS=($(printf "%s\n" "${TARGETS[@]}" | sort))
 unset IFS
 
-{
-    echo
-    echo "| Platform | Result |"
-    echo "| :------- | :----: |"
-} >> "$GITHUB_STEP_SUMMARY"
+echo >> "$GITHUB_STEP_SUMMARY"
 
 for os in "${TARGETS[@]}"; do
-    value="${DATA[$os]:-N/A}"
+    total="${TOTALS[$os]}"
+    passed="${PASSEDS[$os]}"
+    failed="${FAILEDS[$os]}"
+    time="${TIMES[$os]}"
+    avg="${AVERAGES[$os]}"
 
-    if [[ "$value" == "N/A" ]]; then
-        echo "| **$os** | - |" >> "$GITHUB_STEP_SUMMARY"
-        continue
-    fi
-
-    IFS="/" read -r passed total <<< "$value"
-
-    if (( passed == total )); then
-        color="brightgreen"
-    else
-        color="red"
-    fi
-
-    badge="${value//\//%2F}"
-
-    echo "| **$os** | ![$value](https://img.shields.io/badge/-${badge}-${color}?style=flat-square) |" \
-        >> "$GITHUB_STEP_SUMMARY"
+    {
+        echo "## $os"
+        echo '```text'
+        echo "==========================================="
+        echo "            C3C Tester Summary"
+        echo "==========================================="
+        printf "Platform : %s\n" "$os"
+        echo
+        printf "Total    : %d\n" "$total"
+        printf "Passed   : %d\n" "$passed"
+        printf "Failed   : %d\n" "$failed"
+        echo
+        printf "Compile Time : %ss\n" "$time"
+        printf "Average      : %ss/file\n" "$avg"
+        echo "==========================================="
+        echo '```'
+        echo
+    } >> "$GITHUB_STEP_SUMMARY"
 done
 
 {
-    echo
-    printf "**Total Progress: %d/%d Passes (%d Failures)**\n" \
-        "$P_SUM" "$T_SUM" "$F_SUM"
+    echo "## Overall"
+    echo '```text'
+    echo "==========================================="
+    echo "          Overall Test Summary"
+    echo "==========================================="
+    printf "Total Tests : %d\n" "$T_SUM"
+    printf "Passed      : %d\n" "$P_SUM"
+    printf "Failed      : %d\n" "$F_SUM"
+    echo "==========================================="
+    echo '```'
     echo
 } >> "$GITHUB_STEP_SUMMARY"
 
@@ -81,6 +97,7 @@ fi
 
 if (( ${#FAILS[@]} > 0 )); then
     {
+        echo
         echo "### Failure Details"
         echo '```'
         printf "%s\n" "${FAILS[@]}"
