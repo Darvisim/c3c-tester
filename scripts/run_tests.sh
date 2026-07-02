@@ -42,12 +42,13 @@ format_duration() {
     end_ns=$(date +%s%N)
     elapsed_ns=$((end_ns - start_ns))
 
-    TOTAL_TIME_NS=$((TOTAL_TIME_NS + elapsed_ns))
-
     secs=$((elapsed_ns / 1000000000))
     millis=$(((elapsed_ns % 1000000000) / 1000000))
 
-    printf "%d.%03d" "$secs" "$millis"
+    printf "%d.%03d|%d\n" \
+        "$secs" \
+        "$millis" \
+        "$elapsed_ns"
 }
 
 print_result() {
@@ -129,8 +130,11 @@ compile_file() {
 
     rm -rf "$temp_dir"
 
-    duration=$(format_duration "$start_time")
+    local elapsed_ns
 
+    IFS='|' read -r duration elapsed_ns \
+        <<< "$(format_duration "$start_time")"
+    
     if (( status != 0 )); then
         {
             echo "------------------------------------------------------------"
@@ -141,7 +145,7 @@ compile_file() {
         } >> "$fail_log"
     fi
 
-    echo "RESULT:$([[ $status -eq 0 ]] && echo PASS || echo FAIL)|$file|$duration"
+    echo "RESULT:$([[ $status -eq 0 ]] && echo PASS || echo FAIL)|$file|$duration|$elapsed_ns"
 }
 
 run_compile_suite() {
@@ -168,7 +172,7 @@ run_compile_suite() {
 
     log_info "Running $name ($SUITE_TOTAL files) on $JOBS jobs"
 
-    export -f compile_file
+    export -f compile_file format_duration
     export C3C
 
     local buffer
@@ -182,12 +186,15 @@ run_compile_suite() {
 
     while IFS= read -r line; do
 
-        [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)$ ]] || continue
+        [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*)$ ]] || continue
 
         local result="${BASH_REMATCH[1]}"
         local file="${BASH_REMATCH[2]}"
         local duration="${BASH_REMATCH[3]}"
+        local elapsed_ns="${BASH_REMATCH[4]}"
 
+        TOTAL_TIME_NS=$((TOTAL_TIME_NS + elapsed_ns))
+        
         if [[ "$result" == PASS ]]; then
             ((PASSED++))
             print_result PASS "$file" "$duration"
@@ -226,7 +233,12 @@ run_test_bundle() {
     printf "%s\n" "$output"
     echo "::endgroup::"
 
-    duration=$(format_duration "$start_time")
+    duration=$(format_duration "$start_time")local elapsed_ns
+
+    IFS='|' read -r duration elapsed_ns \
+        <<< "$(format_duration "$start_time")"
+    
+    TOTAL_TIME_NS=$((TOTAL_TIME_NS + elapsed_ns))
 
     if (( status == 0 )); then
         ((PASSED++))
@@ -289,8 +301,6 @@ print_summary() {
     printf "Failed   : %d\n" "$FAILED"
 
     echo
-
-    printf "Compile Time : %.3fs\n" "$TOTAL_TIME"
 
     local secs millis
     secs=$((TOTAL_TIME_NS / 1000000000))
