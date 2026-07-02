@@ -71,11 +71,3 @@ ensure_executable() {
     [[ "$PLATFORM" == "Windows" ]] && return
     [[ -f "$1" ]] && chmod +x "$1"
 }
-
-get_bin_name() {
-    local file="${1:-}"
-    local n
-    n=$(basename "${file%.*}")
-    [[ "$PLATFORM" == "Windows" ]] && n+=".exe"
-    echo "$n"
-}
