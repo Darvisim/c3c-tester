@@ -106,7 +106,7 @@ compile_file() {
         )
     fi
 
-    local -a args=("$command" -q)
+    local -a args=("$command" -q --stdlib "$(realpath c3c/lib)")
 
     case "$command" in
         compile-only)
