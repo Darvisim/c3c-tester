@@ -233,8 +233,9 @@ run_test_bundle() {
     printf "%s\n" "$output"
     echo "::endgroup::"
 
-    duration=$(format_duration "$start_time")local elapsed_ns
-
+    duration=$(format_duration "$start_time")
+    
+    local elapsed_ns
     IFS='|' read -r duration elapsed_ns \
         <<< "$(format_duration "$start_time")"
     
