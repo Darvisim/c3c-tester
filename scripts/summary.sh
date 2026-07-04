@@ -21,7 +21,6 @@ declare -A AVERAGES
 declare -A SUITE_TOTALS
 declare -A SUITE_PASSED
 declare -A SUITE_FAILED
-
 declare -A SUITE_FAIL_LIST
 
 while IFS= read -r file; do
@@ -69,89 +68,100 @@ unset IFS
 
 for os in "${TARGETS[@]}"; do
 
-    {
-        echo "## $os"
-        echo
-        echo '```text'
-        echo "==========================================="
-        echo "            C3C Tester Summary"
-        echo "==========================================="
-        echo
+{
+echo "## $os"
+echo
+echo '```text'
+echo "==========================================="
+echo "            C3C Tester Summary"
+echo "==========================================="
+echo
 
-        printf "Platform     : %s\n" "$os"
-        printf "Compile Time : %ss\n" "${TIMES[$os]}"
-        printf "Average      : %ss/file\n" "${AVERAGES[$os]}"
-        echo
+printf "Platform     : %s\n" "$os"
+printf "Compile Time : %ss\n" "${TIMES[$os]}"
+printf "Average      : %ss/file\n" "${AVERAGES[$os]}"
+echo
 
-        for suite in \
-            "Standard Library" \
-            "Benchmarks" \
-            "Resources" \
-            "Unit Tests" \
-            "Test Suite"
-        do
-            total="${SUITE_TOTALS[$os|$suite]}"
-            passed="${SUITE_PASSED[$os|$suite]}"
-            failed="${SUITE_FAILED[$os|$suite]}"
+for suite in \
+    "Standard Library" \
+    "Benchmarks" \
+    "Resources" \
+    "Unit Tests" \
+    "Test Suite"
+do
+    total="${SUITE_TOTALS[$os|$suite]}"
+    [[ -z "$total" ]] && continue
 
-            [[ -z "$total" ]] && continue
+    passed="${SUITE_PASSED[$os|$suite]}"
+    failed="${SUITE_FAILED[$os|$suite]}"
 
-            if (( failed == 0 )); then
-                printf "✓ %-20s %4d/%-4d\n" "$suite" "$passed" "$total"
-            else
-                printf "✗ %-20s %4d/%-4d\n" "$suite" "$passed" "$total"
-            fi
-        done
+    if (( failed == 0 )); then
+        printf "✓ %-20s %4d / %-4d passed\n" \
+            "$suite" \
+            "$passed" \
+            "$total"
+    else
+        printf "✗ %-20s %4d / %-4d passed\n" \
+            "$suite" \
+            "$passed" \
+            "$total"
+    fi
+done
 
-        echo
-        echo "-------------------------------------------"
+echo
+echo "-------------------------------------------"
 
-        printf "Total  : %s\n" "${TOTALS[$os]}"
-        printf "Passed : %s\n" "${PASSEDS[$os]}"
-        printf "Failed : %s\n" "${FAILEDS[$os]}"
+printf "Total  : %s\n" "${TOTALS[$os]}"
+printf "Passed : %s\n" "${PASSEDS[$os]}"
+printf "Failed : %s\n" "${FAILEDS[$os]}"
 
-        echo "==========================================="
-        echo '```'
-        echo
+echo "==========================================="
+echo '```'
+echo
 
-        for suite in \
-            "Standard Library" \
-            "Benchmarks" \
-            "Resources" \
-            "Unit Tests" \
-            "Test Suite"
-        do
-            failed="${SUITE_FAILED[$os|$suite]}"
+for suite in \
+    "Standard Library" \
+    "Benchmarks" \
+    "Resources" \
+    "Unit Tests" \
+    "Test Suite"
+do
+    failed="${SUITE_FAILED[$os|$suite]}"
+    (( failed > 0 )) || continue
 
-            (( failed > 0 )) || continue
+    echo "<details>"
+    echo "<summary>$suite ($failed failures)</summary>"
+    echo
+    echo '```text'
+    printf "%s" "${SUITE_FAIL_LIST[$os|$suite]}"
+    echo '```'
+    echo "</details>"
+    echo
+done
 
-            echo "<details>"
-            echo "<summary>$suite ($failed failures)</summary>"
-            echo
-            echo '```text'
-            printf "%s" "${SUITE_FAIL_LIST[$os|$suite]}"
-            echo '```'
-            echo "</details>"
-            echo
-        done
-
-    } >> "$GITHUB_STEP_SUMMARY"
+} >> "$GITHUB_STEP_SUMMARY"
 
 done
 
 {
-    echo "## Overall"
-    echo
-    echo '```text'
-    printf "Total Tests : %d\n" "$T_SUM"
-    printf "Passed      : %d\n" "$P_SUM"
-    printf "Failed      : %d\n" "$F_SUM"
-    echo '```'
+echo "## Overall"
+echo
+echo '```text'
+echo "==========================================="
+echo "          Overall Test Summary"
+echo "==========================================="
 
-    if (( F_SUM == 0 && T_SUM > 0 )); then
-        echo
-        echo "### 🎉 All Tests Passed!"
-    fi
+printf "Total Tests : %d\n" "$T_SUM"
+printf "Passed      : %d\n" "$P_SUM"
+printf "Failed      : %d\n" "$F_SUM"
+
+echo "==========================================="
+echo '```'
+
+if (( F_SUM == 0 && T_SUM > 0 )); then
+    echo
+    echo "### 🎉 All Tests Passed!"
+fi
 
 } >> "$GITHUB_STEP_SUMMARY"
 
