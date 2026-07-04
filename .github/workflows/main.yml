@@ -39,8 +39,8 @@ jobs:
         with:
           version: nightly
 
-      - name: Checkout C3 Compiler
-        uses: actions/checkout@v6
+      - name: Checkout C3
+        uses: actions/checkout@v7
         with:
           repository: c3lang/c3c
           path: c3c
@@ -64,8 +64,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download all test results
         uses: actions/download-artifact@v8
