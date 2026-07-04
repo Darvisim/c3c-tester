@@ -20,14 +20,6 @@ case "$OS" in
     *)                     PLATFORM="Unknown" ;;
 esac
 
-ARCH="${RUNNER_ARCH:-$(uname -m)}"
-case "$ARCH" in
-    X64|x86_64|amd64) ARCH="x64" ;;
-    ARM64|aarch64)    ARCH="arm64" ;;
-    ARM|armv7*|armv6*) ARCH="arm" ;;
-    i386|i686|x86)    ARCH="x86" ;;
-esac
-
 get_c3c_path() {
     local bin="c3c"
     [[ "$PLATFORM" == "Windows" ]] && bin+=".exe"
