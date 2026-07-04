@@ -17,6 +17,11 @@ SUITE_TOTAL=0
 TOTAL_TIME_NS=0
 NAME_WIDTH=75
 
+TOTAL_SECS=0
+TOTAL_MILLIS=0
+AVG_SECS=0
+AVG_MILLIS=0
+
 declare -a FAILS=()
 declare -a SUITE_RESULTS=()
 
@@ -36,22 +41,6 @@ fi
 
 : > "$FAIL_LOG"
 
-format_duration() {
-    local start_ns="$1"
-    local end_ns elapsed_ns secs millis
-
-    end_ns=$(date +%s%N)
-    elapsed_ns=$((end_ns - start_ns))
-
-    secs=$((elapsed_ns / 1000000000))
-    millis=$(((elapsed_ns % 1000000000) / 1000000))
-
-    printf "%d.%03d|%d\n" \
-        "$secs" \
-        "$millis" \
-        "$elapsed_ns"
-}
-
 print_result() {
     local status="$1"
     local name="$2"
@@ -66,6 +55,37 @@ print_result() {
         "$NAME_WIDTH" \
         "$name" \
         "$duration"
+}
+
+calculate_stats() {
+    TOTAL_SECS=$((TOTAL_TIME_NS / 1000000000))
+    TOTAL_MILLIS=$(((TOTAL_TIME_NS % 1000000000) / 1000000))
+
+    AVG_SECS=0
+    AVG_MILLIS=0
+
+    if (( TOTAL > 0 )); then
+        local avg_ns=$((TOTAL_TIME_NS / TOTAL))
+
+        AVG_SECS=$((avg_ns / 1000000000))
+        AVG_MILLIS=$(((avg_ns % 1000000000) / 1000000))
+    fi
+}
+
+record_failure() {
+    local suite="$1"
+    local file="$2"
+    local output="$3"
+
+    FAILS+=("$suite|$(shorten_path "$file")")
+
+    {
+        echo "------------------------------------------------------------"
+        echo "$file"
+        echo "------------------------------------------------------------"
+        printf "%s\n" "$output"
+        echo
+    } >> "$FAIL_LOG"
 }
 
 collect_files() {
@@ -88,17 +108,18 @@ compile_file() {
     local init_project="$3"
     local fail_log="$4"
 
-    local status=0
-    local output=""
+    local status
+    local output
     local start_time
     local duration
+    local elapsed_ns
     local abs_file
     local temp_dir
 
     start_time=$(date +%s%N)
 
     abs_file=$(realpath "$file" 2>/dev/null || echo "$file")
-    temp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3j')
+    temp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t c3j)
 
     if [[ "$init_project" == "true" ]]; then
         (
@@ -107,7 +128,11 @@ compile_file() {
         )
     fi
 
-    local -a args=("$command" -q --stdlib "$(realpath c3c/lib)")
+    local -a args=(
+        "$command"
+        -q
+        --stdlib "$(realpath c3c/lib)"
+    )
 
     case "$command" in
         compile-only)
@@ -120,22 +145,17 @@ compile_file() {
 
     args+=("$abs_file")
 
-    if output=$(
+    output=$(
         cd "$temp_dir" &&
         "$C3C" "${args[@]}" 2>&1
-    ); then
-        status=0
-    else
-        status=$?
-    fi
+    )
+    status=$?
 
     rm -rf "$temp_dir"
 
-    local elapsed_ns
-
     IFS='|' read -r duration elapsed_ns \
         <<< "$(format_duration "$start_time")"
-    
+
     if (( status != 0 )); then
         {
             echo "------------------------------------------------------------"
@@ -146,16 +166,21 @@ compile_file() {
         } >> "$fail_log"
     fi
 
-    echo "RESULT:$([[ $status -eq 0 ]] && echo PASS || echo FAIL)|$file|$duration|$elapsed_ns"
+    printf "RESULT|%s|%s|%s|%s\n" \
+        "$([[ $status -eq 0 ]] && echo PASS || echo FAIL)" \
+        "$file" \
+        "$duration" \
+        "$elapsed_ns"
 }
 
 run_compile_suite() {
-    local suite_pass_before=$PASSED
-    local suite_fail_before=$FAILED
     local name="$1"
     local directory="$2"
     local command="$3"
     local init_project="$4"
+
+    local suite_pass_before=$PASSED
+    local suite_fail_before=$FAILED
 
     COUNT=0
 
@@ -183,32 +208,32 @@ run_compile_suite() {
 
     printf "%s\n" "${FILES[@]}" |
         xargs -P "$JOBS" -I{} \
-        bash -c 'compile_file "$@"' \
-        _ {} "$command" "$init_project" "$FAIL_LOG" \
-        > "$buffer"
+            bash -c 'compile_file "$@"' \
+            _ {} "$command" "$init_project" "$FAIL_LOG" \
+            > "$buffer"
 
     while IFS= read -r line; do
 
-        [[ "$line" =~ ^RESULT:(PASS|FAIL)\|(.*)\|(.*)\|(.*)$ ]] || continue
-
+        [[ "$line" =~ ^RESULT\|(PASS|FAIL)\|(.*)\|(.*)\|(.*)$ ]] || continue
+    
         local result="${BASH_REMATCH[1]}"
         local file="${BASH_REMATCH[2]}"
         local duration="${BASH_REMATCH[3]}"
         local elapsed_ns="${BASH_REMATCH[4]}"
-
+    
         TOTAL_TIME_NS=$((TOTAL_TIME_NS + elapsed_ns))
-        
+    
         if [[ "$result" == PASS ]]; then
             ((PASSED++))
             print_result PASS "$file" "$duration"
         else
             ((FAILED++))
-            FAILS+=("$name|$file")
+            FAILS+=("$name|$(shorten_path "$file")")
             print_result FAIL "$file" "$duration"
         fi
-
+    
     done < "$buffer"
-
+    
     rm -f "$buffer"
 
     local suite_passed=$((PASSED - suite_pass_before))
@@ -220,16 +245,18 @@ run_compile_suite() {
 }
 
 run_test_bundle() {
-    local suite_pass_before=$PASSED
-    local suite_fail_before=$FAILED
     local name="$1"
     local command="$2"
     local working_dir="${3:-.}"
+
+    local suite_pass_before=$PASSED
+    local suite_fail_before=$FAILED
 
     local status=0
     local output=""
     local start_time
     local duration
+    local elapsed_ns
 
     start_time=$(date +%s%N)
 
@@ -240,15 +267,18 @@ run_test_bundle() {
 
     local resolved_command="${command//\$C3C/$quoted_c3}"
 
-    output=$(cd "$working_dir" && eval "$resolved_command" 2>&1) || status=$?
+    output=$(
+        cd "$working_dir" &&
+        eval "$resolved_command" 2>&1
+    ) || status=$?
 
     printf "%s\n" "$output"
+
     echo "::endgroup::"
-    
-    local elapsed_ns
+
     IFS='|' read -r duration elapsed_ns \
         <<< "$(format_duration "$start_time")"
-    
+
     TOTAL_TIME_NS=$((TOTAL_TIME_NS + elapsed_ns))
 
     if (( status == 0 )); then
@@ -256,32 +286,30 @@ run_test_bundle() {
         print_result PASS "$name" "$duration"
     else
         ((FAILED++))
-        FAILS+=("$name|$name")
+    
+        record_failure \
+            "$name" \
+            "$name" \
+            "$output"
+    
         print_result FAIL "$name" "$duration"
-
-        {
-            echo "------------------------------------------------------------"
-            echo "$name"
-            echo "------------------------------------------------------------"
-            printf "%s\n" "$output"
-            echo
-        } >> "$FAIL_LOG"
     fi
-
+    
     local suite_passed=$((PASSED - suite_pass_before))
     local suite_failed=$((FAILED - suite_fail_before))
-    
+
     SUITE_RESULTS+=(
         "$name|1|$suite_passed|$suite_failed"
     )
 }
 
 run_test_suite() {
+
     local workspace
 
     workspace=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3b')
 
-    cp -r "c3c/test" "$workspace/" 2>/dev/null || true
+    cp -r c3c/test "$workspace/" 2>/dev/null || true
 
     COUNT=0
     SUITE_TOTAL=2
@@ -317,94 +345,75 @@ print_summary() {
     printf "Total    : %d\n" "$TOTAL"
     printf "Passed   : %d\n" "$PASSED"
     printf "Failed   : %d\n" "$FAILED"
-
     echo
 
-    local secs millis
-    secs=$((TOTAL_TIME_NS / 1000000000))
-    millis=$(((TOTAL_TIME_NS % 1000000000) / 1000000))
-    
-    printf "Compile Time : %d.%03ds\n" "$secs" "$millis"
-    
-    if (( TOTAL > 0 )); then
-        local avg_ns avg_secs avg_millis
-    
-        avg_ns=$((TOTAL_TIME_NS / TOTAL))
-        avg_secs=$((avg_ns / 1000000000))
-        avg_millis=$(((avg_ns % 1000000000) / 1000000))
-    
-        printf "Average      : %d.%03ds/file\n" \
-            "$avg_secs" \
-            "$avg_millis"
-    fi
+    printf "Compile Time : %d.%03ds\n" \
+        "$TOTAL_SECS" \
+        "$TOTAL_MILLIS"
+
+    printf "Average      : %d.%03ds/file\n" \
+        "$AVG_SECS" \
+        "$AVG_MILLIS"
 
     echo "==========================================="
 }
 
 write_results() {
-
-    local secs millis
-    local avg_secs=0
-    local avg_millis=0
-
-    secs=$((TOTAL_TIME_NS / 1000000000))
-    millis=$(((TOTAL_TIME_NS % 1000000000) / 1000000))
-
-    if (( TOTAL > 0 )); then
-        local avg_ns
-
-        avg_ns=$((TOTAL_TIME_NS / TOTAL))
-        avg_secs=$((avg_ns / 1000000000))
-        avg_millis=$(((avg_ns % 1000000000) / 1000000))
-    fi
-
     {
         printf "HEADER|%s|%d|%d|%d|%d.%03d|%d.%03d\n" \
             "$PLATFORM" \
             "$TOTAL" \
             "$PASSED" \
             "$FAILED" \
-            "$secs" \
-            "$millis" \
-            "$avg_secs" \
-            "$avg_millis"
+            "$TOTAL_SECS" \
+            "$TOTAL_MILLIS" \
+            "$AVG_SECS" \
+            "$AVG_MILLIS"
 
-        for s in "${SUITE_RESULTS[@]}"; do
-            printf "SUITE|%s\n" "$s"
+        for suite in "${SUITE_RESULTS[@]}"; do
+            printf "SUITE|%s\n" "$suite"
         done
 
-        for f in "${FAILS[@]}"; do
-            printf "FAIL|%s\n" "$f"
+        for fail in "${FAILS[@]}"; do
+            printf "FAIL|%s\n" "$fail"
         done
     } > "$RES_FILE"
 
-    if (( FAILED == 0 )); then
-        rm -f "$FAIL_LOG"
-    fi
+    (( FAILED == 0 )) && rm -f "$FAIL_LOG"
 }
 
-run_compile_suite \
-    "Standard Library" \
-    "c3c/lib/std" \
-    "compile-only" \
-    false
+run_all_suites() {
+    run_compile_suite \
+        "Standard Library" \
+        "c3c/lib/std" \
+        "compile-only" \
+        false
 
-run_compile_suite \
-    "Benchmarks" \
-    "c3c/benchmarks/stdlib" \
-    "compile-benchmark" \
-    false
+    run_compile_suite \
+        "Benchmarks" \
+        "c3c/benchmarks/stdlib" \
+        "compile-benchmark" \
+        false
 
-run_compile_suite \
-    "Resources" \
-    "c3c/resources" \
-    "compile-only" \
-    true
+    run_compile_suite \
+        "Resources" \
+        "c3c/resources" \
+        "compile-only" \
+        true
 
-run_test_suite
+    run_test_suite
+}
 
-print_summary
-write_results
+main() {
+    run_all_suites
 
-[[ "$STRICT" == "true" && $FAILED -gt 0 ]] && exit 1
+    calculate_stats
+
+    print_summary
+    write_results
+
+    [[ "$STRICT" == "true" && $FAILED -gt 0 ]] && exit 1
+}
+
+main
 exit 0
