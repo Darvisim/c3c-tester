@@ -71,3 +71,30 @@ ensure_executable() {
     [[ "$PLATFORM" == "Windows" ]] && return
     [[ -f "$1" ]] && chmod +x "$1"
 }
+
+format_duration() {
+    local start_ns="$1"
+    local end_ns elapsed_ns secs millis
+
+    end_ns=$(date +%s%N)
+    elapsed_ns=$((end_ns - start_ns))
+
+    secs=$((elapsed_ns / 1000000000))
+    millis=$(((elapsed_ns % 1000000000) / 1000000))
+
+    printf "%d.%03d|%d\n" \
+        "$secs" \
+        "$millis" \
+        "$elapsed_ns"
+}
+
+shorten_path() {
+    local path="$1"
+
+    path="${path#c3c/lib/std/}"
+    path="${path#c3c/benchmarks/stdlib/}"
+    path="${path#c3c/resources/}"
+    path="${path#c3c/test/}"
+
+    printf "%s" "$path"
+}
