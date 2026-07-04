@@ -10,99 +10,148 @@ T_SUM=0
 P_SUM=0
 F_SUM=0
 
+declare -a TARGETS=()
+
 declare -A TOTALS
 declare -A PASSEDS
 declare -A FAILEDS
 declare -A TIMES
 declare -A AVERAGES
-declare -a FAILS=()
-declare -a TARGETS=()
 
-while IFS= read -r f; do
-    [[ -s "$f" ]] || continue
+declare -A SUITE_TOTALS
+declare -A SUITE_PASSED
+declare -A SUITE_FAILED
 
-    read -r header < "$f"
+declare -A SUITE_FAIL_LIST
 
-    IFS="|" read -r OS TOT PAS FAL TIME AVG <<< "$header"
-    [[ -n "$OS" ]] || continue
+while IFS= read -r file; do
+    [[ -s "$file" ]] || continue
 
-    TOTALS["$OS"]="$TOT"
-    PASSEDS["$OS"]="$PAS"
-    FAILEDS["$OS"]="$FAL"
-    TIMES["$OS"]="$TIME"
-    AVERAGES["$OS"]="$AVG"
+    CURRENT_OS=""
 
-    if [[ ! " ${TARGETS[*]} " =~ " ${OS} " ]]; then
-        TARGETS+=("$OS")
-    fi
+    while IFS='|' read -r TYPE A B C D E F; do
+        case "$TYPE" in
 
-    ((T_SUM += TOT, P_SUM += PAS, F_SUM += FAL))
+        HEADER)
+            CURRENT_OS="$A"
 
-    while IFS= read -r fail; do
-        [[ -n "$fail" ]] && FAILS+=("[$OS] $fail")
-    done < <(tail -n +2 "$f")
+            TOTALS["$CURRENT_OS"]="$B"
+            PASSEDS["$CURRENT_OS"]="$C"
+            FAILEDS["$CURRENT_OS"]="$D"
+            TIMES["$CURRENT_OS"]="$E"
+            AVERAGES["$CURRENT_OS"]="$F"
 
-done < <(find results -name "test_results.txt" 2>/dev/null)
+            ((T_SUM += B))
+            ((P_SUM += C))
+            ((F_SUM += D))
+
+            TARGETS+=("$CURRENT_OS")
+            ;;
+
+        SUITE)
+            SUITE_TOTALS["$CURRENT_OS|$A"]="$B"
+            SUITE_PASSED["$CURRENT_OS|$A"]="$C"
+            SUITE_FAILED["$CURRENT_OS|$A"]="$D"
+            ;;
+
+        FAIL)
+            SUITE_FAIL_LIST["$CURRENT_OS|$A"]+="$B"$'\n'
+            ;;
+
+        esac
+    done < "$file"
+
+done < <(find results -name test_results.txt)
 
 IFS=$'\n'
-TARGETS=($(printf "%s\n" "${TARGETS[@]}" | sort))
+TARGETS=($(printf "%s\n" "${TARGETS[@]}" | sort -u))
 unset IFS
 
-echo >> "$GITHUB_STEP_SUMMARY"
-
 for os in "${TARGETS[@]}"; do
-    total="${TOTALS[$os]}"
-    passed="${PASSEDS[$os]}"
-    failed="${FAILEDS[$os]}"
-    time="${TIMES[$os]}"
-    avg="${AVERAGES[$os]}"
 
-    {
-        echo "## $os"
-        echo '```text'
-        echo "==========================================="
-        echo "            C3C Tester Summary"
-        echo "==========================================="
-        printf "Platform : %s\n" "$os"
+{
+echo "# $os"
+echo
+
+echo "==========================================="
+echo "            C3C Tester Summary"
+echo "==========================================="
+echo
+
+printf "Platform     : %s\n" "$os"
+printf "Compile Time : %ss\n" "${TIMES[$os]}"
+printf "Average      : %ss/file\n" "${AVERAGES[$os]}"
+echo
+
+for suite in \
+    "Standard Library" \
+    "Benchmarks" \
+    "Resources" \
+    "Unit Tests" \
+    "Test Suite"
+do
+
+    total="${SUITE_TOTALS[$os|$suite]}"
+    passed="${SUITE_PASSED[$os|$suite]}"
+    failed="${SUITE_FAILED[$os|$suite]}"
+
+    [[ -z "$total" ]] && continue
+
+    if (( failed == 0 )); then
+        echo "✓ $suite"
+    else
+        echo "✗ $suite"
+    fi
+
+    echo "-------------------------------------------"
+    echo "$passed / $total passed"
+
+    if (( failed > 0 )); then
+
         echo
-        printf "Total    : %d\n" "$total"
-        printf "Passed   : %d\n" "$passed"
-        printf "Failed   : %d\n" "$failed"
+        echo "<details>"
+        echo "<summary>$failed failed files</summary>"
         echo
-        printf "Compile Time : %ss\n" "$time"
-        printf "Average      : %ss/file\n" "$avg"
-        echo "==========================================="
-        echo '```'
+
+        printf "%s" "${SUITE_FAIL_LIST[$os|$suite]}"
+
         echo
-    } >> "$GITHUB_STEP_SUMMARY"
+        echo "</details>"
+
+    fi
+
+    echo
+done
+
+echo "==========================================="
+echo "Overall"
+echo "==========================================="
+echo
+
+printf "Total  : %s\n" "${TOTALS[$os]}"
+printf "Passed : %s\n" "${PASSEDS[$os]}"
+printf "Failed : %s\n" "${FAILEDS[$os]}"
+
+echo
+echo
+
+} >> "$GITHUB_STEP_SUMMARY"
+
 done
 
 {
-    echo "## Overall"
-    echo '```text'
-    echo "==========================================="
-    echo "          Overall Test Summary"
-    echo "==========================================="
-    printf "Total Tests : %d\n" "$T_SUM"
-    printf "Passed      : %d\n" "$P_SUM"
-    printf "Failed      : %d\n" "$F_SUM"
-    echo "==========================================="
-    echo '```'
-    echo
+echo "# Overall"
+echo
+
+printf "Total Tests : %d\n" "$T_SUM"
+printf "Passed      : %d\n" "$P_SUM"
+printf "Failed      : %d\n" "$F_SUM"
+
 } >> "$GITHUB_STEP_SUMMARY"
 
-if (( F_SUM == 0 && T_SUM > 0 )); then
-    echo "### All Tests Passed! 🥳🎉🍾" >> "$GITHUB_STEP_SUMMARY"
-fi
-
-if (( ${#FAILS[@]} > 0 )); then
-    {
-        echo
-        echo "### Failure Details"
-        echo '```'
-        printf "%s\n" "${FAILS[@]}"
-        echo '```'
-    } >> "$GITHUB_STEP_SUMMARY"
+if ((F_SUM==0)); then
+    echo >> "$GITHUB_STEP_SUMMARY"
+    echo "### 🎉 All Tests Passed!" >> "$GITHUB_STEP_SUMMARY"
 fi
 
 log_success "Matrix generated."
