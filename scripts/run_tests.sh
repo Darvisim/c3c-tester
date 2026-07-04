@@ -18,6 +18,7 @@ TOTAL_TIME_NS=0
 NAME_WIDTH=75
 
 declare -a FAILS=()
+declare -a SUITE_RESULTS=()
 
 STRICT="${STRICT_MODE:-false}"
 
@@ -149,6 +150,8 @@ compile_file() {
 }
 
 run_compile_suite() {
+    local suite_pass_before=$PASSED
+    local suite_fail_before=$FAILED
     local name="$1"
     local directory="$2"
     local command="$3"
@@ -200,16 +203,25 @@ run_compile_suite() {
             print_result PASS "$file" "$duration"
         else
             ((FAILED++))
-            FAILS+=("$file")
+            FAILS+=("$name|$file")
             print_result FAIL "$file" "$duration"
         fi
 
     done < "$buffer"
 
     rm -f "$buffer"
+
+    local suite_passed=$((PASSED - suite_pass_before))
+    local suite_failed=$((FAILED - suite_fail_before))
+
+    SUITE_RESULTS+=(
+        "$name|$SUITE_TOTAL|$suite_passed|$suite_failed"
+    )
 }
 
 run_test_bundle() {
+    local suite_pass_before=$PASSED
+    local suite_fail_before=$FAILED
     local name="$1"
     local command="$2"
     local working_dir="${3:-.}"
@@ -232,8 +244,6 @@ run_test_bundle() {
 
     printf "%s\n" "$output"
     echo "::endgroup::"
-
-    duration=$(format_duration "$start_time")
     
     local elapsed_ns
     IFS='|' read -r duration elapsed_ns \
@@ -246,7 +256,7 @@ run_test_bundle() {
         print_result PASS "$name" "$duration"
     else
         ((FAILED++))
-        FAILS+=("$name")
+        FAILS+=("$name|$name")
         print_result FAIL "$name" "$duration"
 
         {
@@ -257,6 +267,13 @@ run_test_bundle() {
             echo
         } >> "$FAIL_LOG"
     fi
+
+    local suite_passed=$((PASSED - suite_pass_before))
+    local suite_failed=$((FAILED - suite_fail_before))
+    
+    SUITE_RESULTS+=(
+        "$name|1|$suite_passed|$suite_failed"
+    )
 }
 
 run_test_suite() {
@@ -272,14 +289,14 @@ run_test_suite() {
 
     if [[ -d "$workspace/test/unit" ]]; then
         run_test_bundle \
-            "Unit" \
+            "Unit Tests" \
             "\$C3C compile-test unit -O1" \
             "$workspace/test"
     fi
 
     if [[ -f "$workspace/test/src/test_suite_runner.c3" ]]; then
         run_test_bundle \
-            "Suite" \
+            "Test Suite" \
             "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" \
             "$workspace/test"
     fi
@@ -341,25 +358,31 @@ write_results() {
         avg_millis=$(((avg_ns % 1000000000) / 1000000))
     fi
 
-    printf "%s|%d|%d|%d|%d.%03d|%d.%03d\n" \
-        "$PLATFORM" \
-        "$TOTAL" \
-        "$PASSED" \
-        "$FAILED" \
-        "$secs" \
-        "$millis" \
-        "$avg_secs" \
-        "$avg_millis" \
-        > "$RES_FILE"
+    {
+        printf "HEADER|%s|%d|%d|%d|%d.%03d|%d.%03d\n" \
+            "$PLATFORM" \
+            "$TOTAL" \
+            "$PASSED" \
+            "$FAILED" \
+            "$secs" \
+            "$millis" \
+            "$avg_secs" \
+            "$avg_millis"
 
-    for f in "${FAILS[@]}"; do
-        echo "$f" >> "$RES_FILE"
-    done
+        for s in "${SUITE_RESULTS[@]}"; do
+            printf "SUITE|%s\n" "$s"
+        done
+
+        for f in "${FAILS[@]}"; do
+            printf "FAIL|%s\n" "$f"
+        done
+    } > "$RES_FILE"
 
     if (( FAILED == 0 )); then
         rm -f "$FAIL_LOG"
     fi
 }
+
 run_compile_suite \
     "Standard Library" \
     "c3c/lib/std" \
