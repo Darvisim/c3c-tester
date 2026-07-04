@@ -20,35 +20,73 @@ case "$OS" in
     *)                     PLATFORM="Unknown" ;;
 esac
 
-
-
 get_c3c_path() {
-    if command -v c3c >/dev/null 2>&1; then
-        command -v c3c
+    local bin="c3c"
+    [[ "$PLATFORM" == "Windows" ]] && bin+=".exe"
+
+    if command -v "$bin" >/dev/null 2>&1; then
+        realpath "$(command -v "$bin")"
         return
     fi
-    local bin
-    bin="c3c$([[ "$PLATFORM" == "Windows" ]] && echo ".exe" || echo "")"
-    local base="./c3c/build/$bin"
-    local paths=("$base" "./c3c/build/Release/$bin" "./c3c/build/Debug/$bin" "./c3c/build/bin/$bin")
+
+    local default_path="./c3c/build/$bin"
+    local paths=(
+        "$default_path"
+        "./c3c/build/Release/$bin"
+        "./c3c/build/Debug/$bin"
+        "./c3c/build/bin/$bin"
+    )
+    
     for p in "${paths[@]}"; do
-        if [[ -f "$p" ]]; then realpath "$p"; return; fi
+        [[ -f "$p" ]] && {
+            realpath "$p"
+            return
+        }
     done
-    local found
-    found=$(find ./c3c/build -name "$bin" -type f 2>/dev/null | head -n 1)
-    if [[ -n "$found" ]]; then realpath "$found"; return; fi
-    realpath "$base" 2>/dev/null || echo "$base"
+
+    local found=$(
+        find ./c3c/build \
+            -type f \
+            -name "$bin" 2>/dev/null |
+        head -n1
+    )
+
+    if [[ -n "$found" ]]; then
+        realpath "$found"
+        return
+    fi
+
+    realpath "$default_path" 2>/dev/null || echo "$default_path"
 }
 
 ensure_executable() {
-    if [[ "$PLATFORM" != "Windows" && -f "$1" ]]; then chmod +x "$1"; fi
+    [[ "$PLATFORM" == "Windows" ]] && return
+    [[ -f "$1" ]] && chmod +x "$1"
 }
 
-get_bin_name() {
-    local f="${1:-}"
-    local b
-    b=$(basename "$f")
-    local n="${b%.*}"
-    [[ "${PLATFORM:-}" == "Windows" ]] && n="${n}.exe"
-    echo "$n"
+format_duration() {
+    local start_ns="$1"
+    local end_ns elapsed_ns secs millis
+
+    end_ns=$(date +%s%N)
+    elapsed_ns=$((end_ns - start_ns))
+
+    secs=$((elapsed_ns / 1000000000))
+    millis=$(((elapsed_ns % 1000000000) / 1000000))
+
+    printf "%d.%03d|%d\n" \
+        "$secs" \
+        "$millis" \
+        "$elapsed_ns"
+}
+
+shorten_path() {
+    local path="$1"
+
+    path="${path#c3c/lib/std/}"
+    path="${path#c3c/benchmarks/stdlib/}"
+    path="${path#c3c/resources/}"
+    path="${path#c3c/test/}"
+
+    printf "%s" "$path"
 }

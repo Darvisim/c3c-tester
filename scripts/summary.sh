@@ -1,68 +1,168 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/common.sh
 source "$(dirname "$0")/common.sh"
+
 log_info "Generating matrix summary..."
-[ -z "${GITHUB_STEP_SUMMARY:-}" ] && GITHUB_STEP_SUMMARY="/dev/null"
 
-T_SUM=0; P_SUM=0; F_SUM=0; FAILS=()
-declare -A DATA
-OSS=()
-TARGETS=()
+: "${GITHUB_STEP_SUMMARY:=/dev/null}"
 
-while IFS= read -r f; do
-    [ -s "$f" ] || continue
-    read -r h < "$f"
-    IFS="|" read -r OS MOD TOT PAS FAL <<< "$h"
-    [[ -n "$OS" && -n "$MOD" ]] || continue
-    DATA["$MOD,$OS"]="$PAS/$TOT"
-    [[ ! " ${OSS[*]} " == *" ${OS} "* ]] && OSS+=("$OS")
-    [[ ! " ${TARGETS[*]} " == *" ${MOD} "* ]] && TARGETS+=("$MOD")
-    ((T_SUM+=${TOT:-0}, P_SUM+=${PAS:-0}, F_SUM+=${FAL:-0})) || true
-    while read -r fail; do FAILS+=("[$OS/$MOD] $fail"); done < <(tail -n +2 "$f")
-done < <(find results -name "test_results.txt" 2>/dev/null)
+T_SUM=0
+P_SUM=0
+F_SUM=0
 
-mapfile -t OSS < <(printf "%s\n" "${OSS[@]}" | sort)
-mapfile -t TARGETS < <(printf "%s\n" "${TARGETS[@]}" | sort)
+declare -a TARGETS=()
 
-H="| Target | "
-S="| :--- | "
-for os in "${OSS[@]}"; do
-    H+="$os | "
-    S+=":---: | "
+declare -A TOTALS
+declare -A PASSEDS
+declare -A FAILEDS
+declare -A TIMES
+declare -A AVERAGES
+
+declare -A SUITE_TOTALS
+declare -A SUITE_PASSED
+declare -A SUITE_FAILED
+declare -A SUITE_FAIL_LIST
+
+while IFS= read -r file; do
+    [[ -s "$file" ]] || continue
+
+    current_os=""
+
+    while IFS='|' read -r type a b c d e f; do
+        case "$type" in
+
+        HEADER)
+            current_os="$a"
+
+            TOTALS["$current_os"]="$b"
+            PASSEDS["$current_os"]="$c"
+            FAILEDS["$current_os"]="$d"
+            TIMES["$current_os"]="$e"
+            AVERAGES["$current_os"]="$f"
+
+            ((T_SUM += b))
+            ((P_SUM += c))
+            ((F_SUM += d))
+
+            TARGETS+=("$current_os")
+            ;;
+
+        SUITE)
+            SUITE_TOTALS["$current_os|$a"]="$b"
+            SUITE_PASSED["$current_os|$a"]="$c"
+            SUITE_FAILED["$current_os|$a"]="$d"
+            ;;
+
+        FAIL)
+            SUITE_FAIL_LIST["$current_os|$a"]+="$b"$'\n'
+            ;;
+
+        esac
+    done < "$file"
+
+done < <(find results -name test_results.txt 2>/dev/null)
+
+IFS=$'\n'
+TARGETS=($(printf "%s\n" "${TARGETS[@]}" | sort -u))
+unset IFS
+
+for os in "${TARGETS[@]}"; do
+
+{
+echo "## $os"
+echo
+echo '```text'
+echo "==========================================="
+echo "            C3C Tester Summary"
+echo "==========================================="
+echo
+
+printf "Platform     : %s\n" "$os"
+printf "Compile Time : %ss\n" "${TIMES[$os]}"
+printf "Average      : %ss/file\n" "${AVERAGES[$os]}"
+echo
+
+for suite in \
+    "Standard Library" \
+    "Benchmarks" \
+    "Resources" \
+    "Unit Tests" \
+    "Test Suite"
+do
+    total="${SUITE_TOTALS[$os|$suite]}"
+    [[ -z "$total" ]] && continue
+
+    passed="${SUITE_PASSED[$os|$suite]}"
+    failed="${SUITE_FAILED[$os|$suite]}"
+
+    if (( failed == 0 )); then
+        printf "✓ %-20s %4d / %-4d passed\n" \
+            "$suite" \
+            "$passed" \
+            "$total"
+    else
+        printf "✗ %-20s %4d / %-4d passed\n" \
+            "$suite" \
+            "$passed" \
+            "$total"
+    fi
+done
+
+echo
+echo "-------------------------------------------"
+
+printf "Total  : %s\n" "${TOTALS[$os]}"
+printf "Passed : %s\n" "${PASSEDS[$os]}"
+printf "Failed : %s\n" "${FAILEDS[$os]}"
+
+echo "==========================================="
+echo '```'
+echo
+
+for suite in \
+    "Standard Library" \
+    "Benchmarks" \
+    "Resources" \
+    "Unit Tests" \
+    "Test Suite"
+do
+    failed="${SUITE_FAILED[$os|$suite]}"
+    (( failed > 0 )) || continue
+
+    echo "<details>"
+    echo "<summary>$suite ($failed failures)</summary>"
+    echo
+    echo '```text'
+    printf "%s" "${SUITE_FAIL_LIST[$os|$suite]}"
+    echo '```'
+    echo "</details>"
+    echo
+done
+
+} >> "$GITHUB_STEP_SUMMARY"
+
 done
 
 {
-    echo ""
-    echo "$H"
-    echo "$S"
+echo "## Overall"
+echo
+echo '```text'
+echo "==========================================="
+echo "          Overall Test Summary"
+echo "==========================================="
+
+printf "Total Tests : %d\n" "$T_SUM"
+printf "Passed      : %d\n" "$P_SUM"
+printf "Failed      : %d\n" "$F_SUM"
+
+echo "==========================================="
+echo '```'
+
+if (( F_SUM == 0 && T_SUM > 0 )); then
+    echo
+    echo "### 🎉 All Tests Passed!"
+fi
+
 } >> "$GITHUB_STEP_SUMMARY"
-
-for t in "${TARGETS[@]}"; do
-    r="| **$t** "
-    for os in "${OSS[@]}"; do
-        v="${DATA["$t,$os"]:-N/A}"
-        if [[ "$v" != "N/A" ]]; then
-            IFS="/" read -r p tot <<< "$v"
-            col=$([ "$p" -eq "$tot" ] && echo "brightgreen" || echo "red")
-            tag=${v//\//%2F}
-            r+="| ![$v](https://img.shields.io/badge/-${tag}-${col}?style=flat-square) "
-        else
-            r+="| - "
-        fi
-    done
-    echo "$r |" >> "$GITHUB_STEP_SUMMARY"
-done
-
-printf "\n**Total Progress: %d/%d Passes (%d Failures)**\n\n" "$P_SUM" "$T_SUM" "$F_SUM" >> "$GITHUB_STEP_SUMMARY"
-
-if [[ $F_SUM -eq 0 && $T_SUM -gt 0 ]]; then
-    echo "### All Tests Passed! 🥳🎉🍾" >> "$GITHUB_STEP_SUMMARY"
-fi
-
-if [[ ${#FAILS[@]} -gt 0 ]]; then
-    printf "### Failures Detail\n\`\`\`\n" >> "$GITHUB_STEP_SUMMARY"
-    for f in "${FAILS[@]}"; do echo "$f" >> "$GITHUB_STEP_SUMMARY"; done
-    printf "\`\`\`\n" >> "$GITHUB_STEP_SUMMARY"
-fi
 
 log_success "Matrix generated."
