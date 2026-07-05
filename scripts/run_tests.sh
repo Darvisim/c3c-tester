@@ -3,7 +3,9 @@
 source "$(dirname "$0")/common.sh"
 set +e +o pipefail
 
-RES_DIR="results-${PLATFORM}"
+RESULTS_ROOT="results"
+RES_DIR="$RESULTS_ROOT/$PLATFORM"
+
 RES_FILE="$RES_DIR/test_results.txt"
 FAIL_LOG="$RES_DIR/failed_tests.log"
 
