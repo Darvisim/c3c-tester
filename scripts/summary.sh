@@ -11,6 +11,11 @@ P_SUM=0
 F_SUM=0
 
 declare -a TARGETS=()
+declare -a SUITES=(
+    "Standard Library"
+    "Benchmarks"
+    "Resources"
+)
 
 declare -A TOTALS
 declare -A PASSEDS
@@ -82,13 +87,7 @@ printf "Compile Time : %ss\n" "${TIMES[$os]}"
 printf "Average      : %ss/file\n" "${AVERAGES[$os]}"
 echo
 
-for suite in \
-    "Standard Library" \
-    "Benchmarks" \
-    "Resources" \
-    "Unit Tests" \
-    "Test Suite"
-do
+for suite in "${SUITES[@]}"; do
     total="${SUITE_TOTALS[$os|$suite]}"
     [[ -z "$total" ]] && continue
 
@@ -119,13 +118,7 @@ echo "==========================================="
 echo '```'
 echo
 
-for suite in \
-    "Standard Library" \
-    "Benchmarks" \
-    "Resources" \
-    "Unit Tests" \
-    "Test Suite"
-do
+for suite in "${SUITES[@]}"; do
     failed="${SUITE_FAILED[$os|$suite]}"
     (( failed > 0 )) || continue
 
