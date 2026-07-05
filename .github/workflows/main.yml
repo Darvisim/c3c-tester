@@ -50,6 +50,9 @@ jobs:
         continue-on-error: true
         run: bash ./scripts/run_tests.sh
 
+      - name: Debug results
+        run: find results -maxdepth 4 -print
+    
       - name: Upload Test Results
         uses: actions/upload-artifact@v7
         with:
@@ -70,6 +73,9 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: results
+
+      - name: Debug results
+        run: find results -maxdepth 4 -print
 
       - name: Generate Summary
         run: bash ./scripts/summary.sh
