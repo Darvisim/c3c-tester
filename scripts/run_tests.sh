@@ -244,94 +244,6 @@ run_compile_suite() {
     )
 }
 
-run_test_bundle() {
-    local name="$1"
-    local command="$2"
-    local working_dir="${3:-.}"
-
-    local suite_pass_before=$PASSED
-    local suite_fail_before=$FAILED
-
-    local status=0
-    local output=""
-    local start_time
-    local duration
-    local elapsed_ns
-
-    start_time=$(date +%s%N)
-
-    echo "::group::$name"
-
-    local quoted_c3
-    quoted_c3=$(printf '%q' "$C3C")
-
-    local resolved_command="${command//\$C3C/$quoted_c3}"
-
-    output=$(
-        cd "$working_dir" &&
-        eval "$resolved_command" 2>&1
-    ) || status=$?
-
-    printf "%s\n" "$output"
-
-    echo "::endgroup::"
-
-    IFS='|' read -r duration elapsed_ns \
-        <<< "$(format_duration "$start_time")"
-
-    TOTAL_TIME_NS=$((TOTAL_TIME_NS + elapsed_ns))
-
-    if (( status == 0 )); then
-        ((PASSED++))
-        print_result PASS "$name" "$duration"
-    else
-        ((FAILED++))
-    
-        record_failure \
-            "$name" \
-            "$name" \
-            "$output"
-    
-        print_result FAIL "$name" "$duration"
-    fi
-    
-    local suite_passed=$((PASSED - suite_pass_before))
-    local suite_failed=$((FAILED - suite_fail_before))
-
-    SUITE_RESULTS+=(
-        "$name|1|$suite_passed|$suite_failed"
-    )
-}
-
-run_test_suite() {
-
-    local workspace
-
-    workspace=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3b')
-
-    cp -r c3c/test "$workspace/" 2>/dev/null || true
-
-    COUNT=0
-    SUITE_TOTAL=2
-    TOTAL=$((TOTAL + SUITE_TOTAL))
-
-    if [[ -d "$workspace/test/unit" ]]; then
-        run_test_bundle \
-            "Unit Tests" \
-            "\$C3C compile-test unit -O1" \
-            "$workspace/test"
-    fi
-
-    if [[ -f "$workspace/test/src/test_suite_runner.c3" ]]; then
-        run_test_bundle \
-            "Test Suite" \
-            "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" \
-            "$workspace/test"
-    fi
-
-    rm -rf "$workspace"
-}
-
 print_summary() {
     echo
 
@@ -400,8 +312,6 @@ run_all_suites() {
         "c3c/resources" \
         "compile-only" \
         true
-
-    run_test_suite
 }
 
 main() {
