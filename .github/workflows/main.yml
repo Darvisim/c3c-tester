@@ -53,8 +53,8 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v7
         with:
-          name: results-${{ runner.os }}
-          path: results-*/
+          name: ${{ runner.os }}
+          path: results/
           retention-days: 1
 
   summary:
