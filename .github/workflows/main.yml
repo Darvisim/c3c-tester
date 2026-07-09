@@ -50,12 +50,12 @@ jobs:
         continue-on-error: true
         run: bash ./scripts/run_tests.sh
 
-     # - name: Upload Test Results
-      #  uses: actions/upload-artifact@v7
-       # with:
-        #  name: ${{ runner.os }}
-        #  path: results/${{ runner.os }}/
-         # retention-days: 1
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ runner.os }}
+          path: results/${{ runner.os }}/
+          retention-days: 1
 
   summary:
     name: Final Test Results
