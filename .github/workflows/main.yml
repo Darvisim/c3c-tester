@@ -45,6 +45,43 @@ jobs:
           repository: c3lang/c3c
           path: c3c
 
+      - name: Allocate Extra Memory
+        shell: bash
+        run: |
+          echo "==> Allocating memory for ${{ runner.os }}..."
+          case "${{ matrix.os }}" in
+            ubuntu-latest)
+              sudo swapoff -a
+              sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              free -h
+              ;;
+              
+            windows-latest)
+              powershell -Command "
+                \$ComputerSystem = Get-CimInstance Win32_ComputerSystem
+                \$ComputerSystem.AutomaticManagedPagefile = \$False
+                \$ComputerSystem | Set-CimInstance
+                \$PageSetting = Get-CimInstance Win32_PageFileSetting | Where-Object {\$_.Name -like 'C:*'}
+                if (\$PageSetting) {
+                    \$PageSetting.InitialSize = 8192
+                    \$PageSetting.MaximumSize = 8192
+                    \$PageSetting | Set-CimInstance
+                } else {
+                    New-CimInstance -ClassName Win32_PageFileSetting -Property @{Name='C:\\pagefile.sys'; InitialSize=8192; MaximumSize=8192}
+                }
+              "
+              ;;
+              
+            macos-latest)
+              sudo hdiutil create -size 8g -type SPARSE -fs HFS+X -volname SwapSpace /tmp/swapspace.sparseimage
+              sudo hdiutil attach -nobrowse /tmp/swapspace.sparseimage
+              sysctl vm.swapusage
+              ;;
+          esac
+
       - name: Run Tests
         id: tests
         continue-on-error: true
