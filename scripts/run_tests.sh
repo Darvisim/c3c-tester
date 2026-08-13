@@ -104,16 +104,6 @@ collect_files() {
         -not -path "*/.*"
 }
 
-prepare_raylib() {
-    log_info "Fetching raylib6..."
-    (
-        cd c3c/resources/examples/raylib || exit 1
-        "$C3C" \
-            --stdlib "$(realpath ../../../lib)" \
-            vendor-fetch raylib6
-    )
-}
-
 compile_file() {
     local file="$1"
     local command="$2"
@@ -154,13 +144,6 @@ compile_file() {
             args+=(--suppress-run)
             ;;
     esac
-
-    if [[ "$file" == c3c/resources/examples/raylib/* ]]; then
-        args+=(
-            --lib raylib6
-            --libdir c3c/resources/examples/raylib
-        )
-    fi
     
     args+=("$abs_file")
 
@@ -325,8 +308,6 @@ run_all_suites() {
         "c3c/benchmarks/stdlib" \
         "compile-benchmark" \
         false
-
-    prepare_raylib
     
     run_compile_suite \
         "Resources" \
