@@ -98,7 +98,7 @@ collect_files() {
         return 1
     fi
 
-    find "$directory" -type f \( -name "*.c3" -o \) -not -path "*/.*"
+    find "$directory" -type f \( -name "*.c3" \) -not -path "*/.*"
 }
 
 compile_file() {
