@@ -45,10 +45,7 @@ get_c3c_path() {
     done
 
     local found=$(
-        find ./c3c/build \
-            -type f \
-            -name "$bin" 2>/dev/null |
-        head -n1
+        find ./c3c/build -type f -name "$bin" 2>/dev/null | head -n1
     )
 
     if [[ -n "$found" ]]; then
@@ -74,10 +71,7 @@ format_duration() {
     secs=$((elapsed_ns / 1000000000))
     millis=$(((elapsed_ns % 1000000000) / 1000000))
 
-    printf "%d.%03d|%d\n" \
-        "$secs" \
-        "$millis" \
-        "$elapsed_ns"
+    printf "%d.%03d|%d\n" "$secs" "$millis" "$elapsed_ns"
 }
 
 shorten_path() {
