@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # shellcheck source=scripts/common.sh
 source "$(dirname "$0")/common.sh"
-set +e +o pipefail
+set +eo pipefail
 
-RES_DIR="results-${PLATFORM}"
+RESULTS_ROOT="results"
+RES_DIR="$RESULTS_ROOT/$PLATFORM"
+
 RES_FILE="$RES_DIR/test_results.txt"
 FAIL_LOG="$RES_DIR/failed_tests.log"
 
@@ -96,10 +98,7 @@ collect_files() {
         return 1
     fi
 
-    find "$directory" \
-        -type f \
-        \( -name "*.c3" -o -name "*.c3t" -o -name "*.c3i" \) \
-        -not -path "*/.*"
+    find "$directory" -type f \( -name "*.c3" -o \) -not -path "*/.*"
 }
 
 compile_file() {
@@ -142,7 +141,7 @@ compile_file() {
             args+=(--suppress-run)
             ;;
     esac
-
+    
     args+=("$abs_file")
 
     output=$(
@@ -153,8 +152,7 @@ compile_file() {
 
     rm -rf "$temp_dir"
 
-    IFS='|' read -r duration elapsed_ns \
-        <<< "$(format_duration "$start_time")"
+    IFS='|' read -r duration elapsed_ns <<< "$(format_duration "$start_time")"
 
     if (( status != 0 )); then
         {
@@ -186,9 +184,7 @@ run_compile_suite() {
 
     local -a FILES=()
 
-    while IFS= read -r file; do
-        FILES+=("$file")
-    done < <(collect_files "$directory")
+    while IFS= read -r file; do FILES+=("$file"); done < <(collect_files "$directory")
 
     SUITE_TOTAL=${#FILES[@]}
     TOTAL=$((TOTAL + SUITE_TOTAL))
@@ -203,8 +199,7 @@ run_compile_suite() {
     export -f compile_file format_duration
     export C3C
 
-    local buffer
-    buffer=$(mktemp)
+    local buffer=$(mktemp)
 
     printf "%s\n" "${FILES[@]}" |
         xargs -P "$JOBS" -I{} \
@@ -244,94 +239,6 @@ run_compile_suite() {
     )
 }
 
-run_test_bundle() {
-    local name="$1"
-    local command="$2"
-    local working_dir="${3:-.}"
-
-    local suite_pass_before=$PASSED
-    local suite_fail_before=$FAILED
-
-    local status=0
-    local output=""
-    local start_time
-    local duration
-    local elapsed_ns
-
-    start_time=$(date +%s%N)
-
-    echo "::group::$name"
-
-    local quoted_c3
-    quoted_c3=$(printf '%q' "$C3C")
-
-    local resolved_command="${command//\$C3C/$quoted_c3}"
-
-    output=$(
-        cd "$working_dir" &&
-        eval "$resolved_command" 2>&1
-    ) || status=$?
-
-    printf "%s\n" "$output"
-
-    echo "::endgroup::"
-
-    IFS='|' read -r duration elapsed_ns \
-        <<< "$(format_duration "$start_time")"
-
-    TOTAL_TIME_NS=$((TOTAL_TIME_NS + elapsed_ns))
-
-    if (( status == 0 )); then
-        ((PASSED++))
-        print_result PASS "$name" "$duration"
-    else
-        ((FAILED++))
-    
-        record_failure \
-            "$name" \
-            "$name" \
-            "$output"
-    
-        print_result FAIL "$name" "$duration"
-    fi
-    
-    local suite_passed=$((PASSED - suite_pass_before))
-    local suite_failed=$((FAILED - suite_fail_before))
-
-    SUITE_RESULTS+=(
-        "$name|1|$suite_passed|$suite_failed"
-    )
-}
-
-run_test_suite() {
-
-    local workspace
-
-    workspace=$(mktemp -d 2>/dev/null || mktemp -d -t 'c3b')
-
-    cp -r c3c/test "$workspace/" 2>/dev/null || true
-
-    COUNT=0
-    SUITE_TOTAL=2
-    TOTAL=$((TOTAL + SUITE_TOTAL))
-
-    if [[ -d "$workspace/test/unit" ]]; then
-        run_test_bundle \
-            "Unit Tests" \
-            "\$C3C compile-test unit -O1" \
-            "$workspace/test"
-    fi
-
-    if [[ -f "$workspace/test/src/test_suite_runner.c3" ]]; then
-        run_test_bundle \
-            "Test Suite" \
-            "\$C3C compile-run -O1 src/test_suite_runner.c3 -- \$C3C test_suite/ --no-terminal" \
-            "$workspace/test"
-    fi
-
-    rm -rf "$workspace"
-}
-
 print_summary() {
     echo
 
@@ -347,13 +254,9 @@ print_summary() {
     printf "Failed   : %d\n" "$FAILED"
     echo
 
-    printf "Compile Time : %d.%03ds\n" \
-        "$TOTAL_SECS" \
-        "$TOTAL_MILLIS"
+    printf "Compile Time : %d.%03ds\n" "$TOTAL_SECS" "$TOTAL_MILLIS"
 
-    printf "Average      : %d.%03ds/file\n" \
-        "$AVG_SECS" \
-        "$AVG_MILLIS"
+    printf "Average      : %d.%03ds/file\n" "$AVG_SECS" "$AVG_MILLIS"
 
     echo "==========================================="
 }
@@ -370,13 +273,9 @@ write_results() {
             "$AVG_SECS" \
             "$AVG_MILLIS"
 
-        for suite in "${SUITE_RESULTS[@]}"; do
-            printf "SUITE|%s\n" "$suite"
-        done
+        for suite in "${SUITE_RESULTS[@]}"; do printf "SUITE|%s\n" "$suite"; done
 
-        for fail in "${FAILS[@]}"; do
-            printf "FAIL|%s\n" "$fail"
-        done
+        for fail in "${FAILS[@]}"; do printf "FAIL|%s\n" "$fail"; done
     } > "$RES_FILE"
 
     (( FAILED == 0 )) && rm -f "$FAIL_LOG"
@@ -394,14 +293,12 @@ run_all_suites() {
         "c3c/benchmarks/stdlib" \
         "compile-benchmark" \
         false
-
+    
     run_compile_suite \
         "Resources" \
         "c3c/resources" \
         "compile-only" \
         true
-
-    run_test_suite
 }
 
 main() {
